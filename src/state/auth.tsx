@@ -1,0 +1,92 @@
+/*
+ * Optional sign-in: a 6-digit code by email (Supabase Auth), then a one-time offer to unlock
+ * with fingerprint / Face ID. The fingerprint never leaves the phone; it only releases the
+ * session kept in the phone's secure storage.
+ */
+import type { Session } from '@supabase/supabase-js';
+import React from 'react';
+import { useBiometricLogin } from '@/design/components';
+import { supabase } from '@/lib/supabase';
+
+interface AuthState {
+  session: Session | null;
+  email?: string;
+  userId?: string;
+  ready: boolean;
+  /** Signed in with fingerprint unlock on, waiting for the fingerprint at launch. */
+  locked: boolean;
+  biometric: ReturnType<typeof useBiometricLogin>;
+  sendCode: (email: string) => Promise<void>;
+  verifyCode: (email: string, code: string) => Promise<Session>;
+  unlock: () => Promise<boolean>;
+  signOut: () => Promise<void>;
+}
+
+const Ctx = React.createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = React.useState<Session | null>(null);
+  const [ready, setReady] = React.useState(false);
+  const [locked, setLocked] = React.useState(false);
+  const [lockChecked, setLockChecked] = React.useState(false);
+  const biometric = useBiometricLogin();
+
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session)).finally(() => setReady(true));
+    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  // At launch only: if fingerprint unlock is on, ask for it before showing the account.
+  React.useEffect(() => {
+    if (!ready || lockChecked) return;
+    const t = setTimeout(() => {
+      setLockChecked(true);
+      if (biometric.enabled && session) setLocked(true);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [ready, lockChecked, biometric.enabled, session]);
+
+  // Keep the stored session fresh for the next fingerprint unlock.
+  React.useEffect(() => {
+    if (biometric.enabled && session?.refresh_token) biometric.store(session.refresh_token).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biometric.enabled, session?.refresh_token]);
+
+  const value: AuthState = {
+    session, ready, locked, biometric,
+    email: session?.user.email ?? undefined,
+    userId: session?.user.id,
+    sendCode: async (email) => {
+      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
+      if (error) throw error;
+    },
+    verifyCode: async (email, code) => {
+      const { data, error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code, type: 'email' });
+      if (error || !data.session) throw error ?? new Error('That code didn’t work. Check it and try again.');
+      return data.session;
+    },
+    unlock: async () => {
+      const token = await biometric.unlock();
+      if (!token) return false;
+      if (!session) {
+        const { error } = await supabase.auth.refreshSession({ refresh_token: token });
+        if (error) return false;
+      }
+      setLocked(false);
+      return true;
+    },
+    signOut: async () => {
+      await biometric.disable();
+      await supabase.auth.signOut().catch(() => {});
+      setLocked(false);
+    },
+  };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useAuth(): AuthState {
+  const v = React.useContext(Ctx);
+  if (!v) throw new Error('useAuth must be inside AuthProvider');
+  return v;
+}

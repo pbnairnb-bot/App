@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "PriceMatch NZ",
+    "slug": "price-match",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "pricematchnz",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "nz.pricematch.app",
+      "supportsTablet": false,
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "nz.pricematch.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1433",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1a1433",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 220,
+          "dark": {
+            "backgroundColor": "#1a1433",
+            "image": "./assets/images/splash-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PriceMatch NZ uses your camera to scan product barcodes. Photos are never saved.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PriceMatch NZ uses your location to show prices and deals at stores near you."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "PriceMatch NZ uses Face ID to unlock your account quickly."
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
+      "expo-image"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "owner": "price-match",
+    "extra": {
+      "eas": {
+        "projectId": "32880598-34b5-46ca-a9e9-d47cac1b2b02"
+      }
+    }
+  }
+}
