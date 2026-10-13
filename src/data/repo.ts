@@ -36,7 +36,7 @@ export async function loadCatalog(): Promise<boolean> {
   try {
     type Row = Record<string, any>;
     const [s, b, p, pr, h, pol] = await Promise.all([
-      all<Row>('stores'), all<Row>('store_branches'), all<Row>('products'), all<Row>('prices'),
+      all<Row>('stores'), all<Row>('store_branches'), all<Row>('catalog_products'), all<Row>('prices'),
       all<Row>('price_history', 'product_id,day,price', 'day'), all<Row>('price_match_policies'),
     ]);
     stores = s.map((r) => ({
@@ -136,6 +136,41 @@ export function deals(at?: GeoPoint): Deal[] {
 
 export function findByBarcode(code: string): Product | undefined {
   return products.find((p) => p.barcode === code);
+}
+
+const toProduct = (r: Record<string, any>): Product => ({
+  id: r.id, barcode: r.barcode ?? undefined, name: r.name, brand: r.brand ?? undefined, size: r.size ?? undefined,
+  unitQty: r.unit_qty != null ? Number(r.unit_qty) : undefined, unit: r.unit ?? undefined, category: r.category,
+  imageUrl: r.image_url ?? undefined, isSample: r.is_sample,
+});
+
+/** Look up any NZ product by barcode in the full database (including products with no prices yet). */
+export async function findByBarcodeRemote(code: string): Promise<Product | null> {
+  try {
+    const { data } = await supabase.from('products').select('*').eq('barcode', code).limit(1);
+    if (!data?.length) return null;
+    const p = toProduct(data[0]);
+    looked.set(p.id, p);
+    return p;
+  } catch { return null; }
+}
+
+/** Search every NZ product in the database by name or brand (for products without prices yet). */
+export async function searchAllProducts(query: string, limit = 25): Promise<Product[]> {
+  const words = query.trim().toLowerCase().split(/\s+/).filter((w) => w.length > 1).slice(0, 4);
+  if (!words.length) return [];
+  try {
+    let q = supabase.from('products').select('id,barcode,name,brand,size,unit_qty,unit,category,image_url,is_sample').limit(limit);
+    for (const w of words) q = q.or(`name.ilike.%${w.replace(/[%,()]/g, '')}%,brand.ilike.%${w.replace(/[%,()]/g, '')}%`);
+    const { data } = await q;
+    const priced = new Set(products.map((p) => p.id));
+    return (data ?? []).map(toProduct).filter((p) => !priced.has(p.id)).map((p) => { looked.set(p.id, p); return p; });
+  } catch { return []; }
+}
+
+/** How many NZ products the app can find (for the Home screen). */
+export async function productCount(): Promise<number | null> {
+  try { const { count } = await supabase.from('products').select('id', { count: 'exact', head: true }); return count ?? null; } catch { return null; }
 }
 
 /** A few catalogue barcodes to try the scanner without a real product. */

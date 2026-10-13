@@ -6,7 +6,9 @@ import { applyFilters, FadeInView, FilterBar, FilterSheet, type Filters, SearchB
 import { radius, space, type } from '@/design/theme';
 import { CATEGORY_LABELS } from '@/data/categories';
 import { formatKm, nzd, unitPrice } from '@/data/compare';
-import { search, type Listing } from '@/data/repo';
+import { search, searchAllProducts, type Listing } from '@/data/repo';
+import type { Product } from '@/data/types';
+import { Image } from 'expo-image';
 import { useApp } from '@/state/app-state';
 import { Card, EmptyState, SampleBanner, Screen, TopBar, VerdictPill } from '@/ui/kit';
 import { ListeningSheet, MicButton, useVoice } from '@/ui/voice';
@@ -20,6 +22,14 @@ export default function Search() {
   const [sheet, setSheet] = React.useState(false);
   const base = React.useMemo(() => search(q, location), [q, location]);
   const results = React.useMemo(() => applyFilters(base, filters, location), [base, filters, location]);
+  // Every other NZ product matching the words, even without prices yet.
+  const [more, setMore] = React.useState<Product[]>([]);
+  React.useEffect(() => {
+    if (q.trim().length < 2) { setMore([]); return; }
+    let alive = true;
+    const t = setTimeout(() => searchAllProducts(q).then((r) => { if (alive) setMore(r); }), 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q]);
   const hints = React.useMemo(() => base.map((l) => l.product.name), [base]);
   const voice = useVoice((t) => setQ(t), hints);
   React.useEffect(() => { if (params.voice) voice.start(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -43,13 +53,36 @@ export default function Search() {
         contentContainerStyle={{ padding: space[4], gap: space[3], paddingBottom: 48 }}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={<View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><SampleBanner /></View>}
-        ListEmptyComponent={<EmptyState icon={SearchX} title="No matches" body={q ? `Nothing found for “${q}”. Try fewer words or clear some filters.` : 'Try clearing some filters.'} action="Clear filters" onAction={() => setFilters({ sort: 'relevance' })} />}
+        ListFooterComponent={more.length ? (
+          <View style={{ gap: space[2], marginTop: space[4] }}>
+            <Text style={[type.h2, { color: c.ink }]}>More NZ products</Text>
+            <Text style={[type.body, { color: c.inkSecondary, marginBottom: space[1] }]}>No prices yet. Tap one to see it or share a price you've seen.</Text>
+            {more.map((p) => <MoreRow key={p.id} p={p} />)}
+          </View>
+        ) : null}
+        ListEmptyComponent={more.length ? null : <EmptyState icon={SearchX} title="No matches" body={q ? `Nothing found for “${q}”. Try fewer words or clear some filters.` : 'Try clearing some filters.'} action="Clear filters" onAction={() => setFilters({ sort: 'relevance' })} />}
         renderItem={({ item, index }) => <FadeInView index={Math.min(index, 8)}><ResultRow l={item} /></FadeInView>}
       />
       <ListeningSheet visible={voice.listening || !!voice.error} partial={voice.partial} error={voice.error}
         onStop={() => { voice.stop(); voice.clearError(); }} onRetry={voice.start} />
       <FilterSheet visible={sheet} items={base} filters={filters} onApply={(f) => { setFilters(f); setSheet(false); }} onClose={() => setSheet(false)} location={location} categoryLabels={CATEGORY_LABELS} />
     </Screen>
+  );
+}
+
+function MoreRow({ p }: { p: Product }) {
+  const c = useTheme();
+  return (
+    <Card onPress={() => router.push({ pathname: '/barcode/[code]', params: { code: p.barcode ?? '' } })} accessibilityLabel={`${p.name}, no prices yet`}
+      style={{ flexDirection: 'row', gap: space[3], padding: space[3], alignItems: 'center' }}>
+      <View style={{ width: 56, height: 56, borderRadius: radius.md, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={{ width: '100%', height: '100%' }} contentFit="contain" /> : <ImageIcon size={22} color={c.inkTertiary} />}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{p.name}{p.size ? ` ${p.size}` : ''}</Text>
+        <Text style={[type.caption, { color: c.inkSecondary }]} numberOfLines={1}>{[p.brand, 'No prices yet'].filter(Boolean).join(' · ')}</Text>
+      </View>
+    </Card>
   );
 }
 

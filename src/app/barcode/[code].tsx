@@ -5,7 +5,7 @@ import React from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Button, FadeInView, Notice, useTheme } from '@/design/components';
 import { radius, space, type } from '@/design/theme';
-import { lookupOpenFoodFacts } from '@/data/repo';
+import { findByBarcodeRemote, lookupOpenFoodFacts } from '@/data/repo';
 import type { Product } from '@/data/types';
 import { useApp } from '@/state/app-state';
 import { EmptyState, Screen, TopBar } from '@/ui/kit';
@@ -20,7 +20,7 @@ export default function BarcodeResult() {
 
   React.useEffect(() => {
     let alive = true;
-    lookupOpenFoodFacts(code).then((p) => {
+    findByBarcodeRemote(code).then((p) => p ?? lookupOpenFoodFacts(code)).then((p) => {
       if (!alive) return;
       setProduct(p);
       setState(p ? 'found' : 'missing');
