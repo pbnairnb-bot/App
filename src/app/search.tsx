@@ -5,18 +5,18 @@ import { FlatList, Text, View } from 'react-native';
 import { applyFilters, FadeInView, FilterBar, FilterSheet, type Filters, SearchBar, type SortKey, useTheme } from '@/design/components';
 import { radius, space, type } from '@/design/theme';
 import { CATEGORY_LABELS } from '@/data/categories';
-import { formatKm, nzd, unitPrice } from '@/data/compare';
+import { formatKm, freshness, nzd, unitPrice } from '@/data/compare';
 import { search, searchAllProducts, type Listing } from '@/data/repo';
 import type { Product } from '@/data/types';
 import { Image } from 'expo-image';
 import { useApp } from '@/state/app-state';
-import { Card, EmptyState, SampleBanner, Screen, TopBar, VerdictPill } from '@/ui/kit';
+import { Card, EmptyState, LiveDataNotice, Screen, TopBar, VerdictPill } from '@/ui/kit';
 import { ListeningSheet, MicButton, useVoice } from '@/ui/voice';
 
 export default function Search() {
   const params = useLocalSearchParams<{ q?: string; category?: string; sort?: SortKey; voice?: string }>();
   const c = useTheme();
-  const { location, catalogVersion, refreshCatalog } = useApp();
+  const { location, catalogVersion, refreshCatalog, catalogStatus } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [q, setQ] = React.useState(params.q ?? '');
   const [filters, setFilters] = React.useState<Filters>({ sort: params.sort ?? 'relevance', categories: params.category ? [params.category] : undefined });
@@ -55,11 +55,11 @@ export default function Search() {
         keyboardShouldPersistTaps="handled"
         refreshing={refreshing}
         onRefresh={async () => { setRefreshing(true); await refreshCatalog(); setRefreshing(false); }}
-        ListHeaderComponent={<View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><SampleBanner /></View>}
+        ListHeaderComponent={catalogStatus === 'live' ? null : <View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} /></View>}
         ListFooterComponent={more.length ? (
           <View style={{ gap: space[2], marginTop: space[4] }}>
-            <Text style={[type.h2, { color: c.ink }]}>More NZ products</Text>
-            <Text style={[type.body, { color: c.inkSecondary, marginBottom: space[1] }]}>No prices yet. Tap one to see it or share a price you've seen.</Text>
+            <Text style={[type.h2, { color: c.ink }]}>{results.length ? 'More NZ products' : 'NZ products'}</Text>
+            <Text style={[type.body, { color: c.inkSecondary, marginBottom: space[1] }]}>No verified store prices yet. Tap one to see it or share a price you've seen.</Text>
             {more.map((p) => <MoreRow key={p.id} p={p} />)}
           </View>
         ) : null}
@@ -101,7 +101,7 @@ function ResultRow({ l }: { l: Listing }) {
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{l.product.name}{l.product.size ? ` ${l.product.size}` : ''}</Text>
         <Text style={[type.caption, { color: c.inkSecondary }]} numberOfLines={1}>
-          {l.best.store.name}{l.best.km != null ? ` · ${formatKm(l.best.km)}` : ''}{l.storeCount > 1 ? ` · lowest of ${l.storeCount}` : ''}{l.isSample ? ' · Sample' : ''}
+          {l.best.store.name}{l.best.km != null ? ` · ${formatKm(l.best.km)}` : ''}{l.storeCount > 1 ? ` · lowest of ${l.storeCount}` : ''}{l.best.stale ? ` · ${freshness(l.best.checkedAt)}` : ''}
         </Text>
         {l.verdictLabel && <VerdictPill label={l.verdictLabel} tone={l.verdictLabel.startsWith('Lowest') ? 'good' : l.verdictLabel.startsWith('Higher') ? 'high' : 'normal'} />}
       </View>

@@ -8,7 +8,6 @@ import React from 'react';
 import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AnimatedSplash } from '@/design/components';
-import { loadCatalog } from '@/data/repo';
 import { AuthProvider, useAuth } from '@/state/auth';
 import { LockScreen } from '@/ui/lock-screen';
 import { colors } from '@/design/theme';
@@ -19,17 +18,19 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Shell() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const c = colors[scheme];
-  const { ready } = useApp();
+  const { ready, refreshCatalog } = useApp();
   const auth = useAuth();
   const [splashDone, setSplashDone] = React.useState(false);
   const [catalog, setCatalog] = React.useState(false);
 
   React.useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
-    // Live prices from Supabase; after 6 s carry on with the bundled copy so the app always opens.
-    const t = setTimeout(() => setCatalog(true), 6000);
-    loadCatalog().finally(() => { clearTimeout(t); setCatalog(true); });
+    // Live prices from Supabase. After 8 s open anyway; screens then say live prices are still
+    // loading or can't be reached, and never show made-up prices.
+    const t = setTimeout(() => setCatalog(true), 8000);
+    refreshCatalog().finally(() => { clearTimeout(t); setCatalog(true); });
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;

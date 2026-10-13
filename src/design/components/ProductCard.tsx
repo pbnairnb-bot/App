@@ -21,7 +21,7 @@ export function ProductCard({ product, isFavourite, onPress, onToggleFavourite, 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${product.name}${product.isSample ? ', sample data' : ''}`}
+      accessibilityLabel={`${product.name}`}
       onPress={() => onPress?.(product)}
       style={{
         width, gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: c.surface,
@@ -46,7 +46,7 @@ export function ProductCard({ product, isFavourite, onPress, onToggleFavourite, 
       </View>
       <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{product.name}</Text>
       <PriceBlock price={product.price} wasPrice={product.wasPrice} size="md" />
-      <Text style={[type.caption, { color: c.inkSecondary }]}>{product.where}{product.isSample ? ' · Sample' : ''}</Text>
+      <Text style={[type.caption, { color: c.inkSecondary }]}>{product.where}</Text>
     </Pressable>
   );
 }

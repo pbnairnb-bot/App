@@ -5,7 +5,6 @@ import React from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { Button, Notice, SettingToggle, useTheme } from '@/design/components';
 import { useAuth } from '@/state/auth';
-import { catalogSource } from '@/data/repo';
 import { radius, size, space, type } from '@/design/theme';
 import { LEGAL } from '@/config';
 import { useApp } from '@/state/app-state';
@@ -15,7 +14,8 @@ const QUIET = [{ label: '9 pm – 8 am', from: 21, to: 8 }, { label: '10 pm – 
 
 export default function Profile() {
   const c = useTheme();
-  const { location, alerts, update, keepScanHistory, scans, clearScans } = useApp();
+  const { location, alerts, update, keepScanHistory, scans, clearScans, catalogStatus, enableAlerts, pushReady } = useApp();
+  const [pushMsg, setPushMsg] = React.useState<string | null>(null);
   const [confirm, setConfirm] = React.useState(false);
   const auth = useAuth();
   const bioLabel = auth.biometric.kind === 'face' ? 'Face ID' : 'fingerprint';
@@ -53,9 +53,22 @@ export default function Profile() {
 
       <Group title="Alerts">
         <View style={{ padding: space[4], gap: space[2] }}>
-          <SettingToggle title="Deal alerts" description="A daily summary of the best verified deals." value={alerts.enabled && alerts.deals} onValueChange={(v) => setAlerts({ enabled: v || alerts.drops, deals: v })} />
-          <SettingToggle title="Price drops" description="When a favourite gets cheaper." value={alerts.enabled && alerts.drops} onValueChange={(v) => setAlerts({ enabled: v || alerts.deals, drops: v })} />
-          <SettingToggle title="Petrol updates" description="Only when reliable fuel prices are available." value={alerts.enabled && alerts.petrol} onValueChange={(v) => setAlerts({ petrol: v, enabled: v || alerts.enabled })} />
+          {!auth.email ? (
+            <>
+              <Text style={[type.body, { color: c.inkSecondary }]}>Sign in to get alerts when a saved product drops in price. Alerts belong to your account.</Text>
+              <View style={{ alignSelf: 'flex-start' }}><Button variant="secondary" onPress={() => router.push('/sign-in')}>Sign in</Button></View>
+            </>
+          ) : (
+            <SettingToggle title="Notifications" description="Show alerts on your lock screen. Turn off to see them only in the app." value={alerts.enabled}
+              onValueChange={async (v) => {
+                if (!v) { setAlerts({ enabled: false }); setPushMsg(null); return; }
+                const r = await enableAlerts();
+                setPushMsg(r === 'ok' ? null : r === 'denied' ? 'Notifications are blocked for PriceMatch NZ. Allow them in your phone settings, then try again.'
+                  : r === 'no-device' ? 'Notifications need a real phone.' : r === 'signed-out' ? 'Sign in first.' : "Couldn't set up notifications on this phone. Alerts still appear in the app.");
+              }} />
+          )}
+          <SettingToggle title="Price drops" description="When a verified price for a favourite gets cheaper." value={alerts.drops} onValueChange={(v) => setAlerts({ drops: v })} />
+          <SettingToggle title="Petrol updates" description="When the national average pump price moves 5c or more (MBIE weekly data)." value={alerts.petrol} onValueChange={(v) => setAlerts({ petrol: v })} />
           <Text style={[type.bodyStrong, { color: c.ink, marginTop: space[2] }]}>Quiet hours</Text>
           <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
             {QUIET.map((q) => {
@@ -69,7 +82,8 @@ export default function Profile() {
             })}
           </View>
           <View style={{ marginTop: space[2] }}>
-            <Notice tone="info" title="Push alerts aren't switched on yet.">Your choices are saved, and we'll ask your phone's permission when alerts launch.</Notice>
+            {pushMsg ? <Notice tone="warning" title="Notifications not on.">{pushMsg}</Notice>
+              : alerts.enabled && auth.email ? <Notice tone="info" title={pushReady ? 'Notifications are on.' : 'Setting up notifications…'}>Alerts also stay in the Alerts screen. Quiet hours use New Zealand time.</Notice> : null}
           </View>
         </View>
       </Group>
@@ -91,7 +105,7 @@ export default function Profile() {
       </Group>
 
       <Text style={[type.caption, { color: c.inkTertiary, textAlign: 'center', marginTop: space[6] }]}>
-        PriceMatch NZ {Constants.expoConfig?.version ?? ''} · Free for New Zealanders{'\n'}{catalogSource === 'live' ? 'Connected to live price data' : 'Offline: showing saved prices'} · Sample prices are labelled
+        PriceMatch NZ {Constants.expoConfig?.version ?? ''} · Free for New Zealanders{'\n'}{catalogStatus === 'live' ? 'Connected to live price data' : catalogStatus === 'offline' ? "Can't reach live price data" : 'Loading live price data'} · Only real, sourced prices are shown
       </Text>
 
       <ConfirmSheet visible={confirm} danger icon={Trash2} title="Clear your scan history?" body={`This removes all ${scans.length} scans from PriceMatch NZ. It can't be undone.`}

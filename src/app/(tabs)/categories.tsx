@@ -23,7 +23,7 @@ export default function Categories() {
           const n = counts[cat.id] ?? 0;
           return (
             <FadeInView key={cat.id} index={i}>
-              <Card accessibilityLabel={cat.label} onPress={() => router.push({ pathname: '/search', params: { category: cat.id } })}
+              <Card accessibilityLabel={cat.label} onPress={() => (cat.id === 'petrol' ? router.push('/') : router.push({ pathname: '/search', params: { category: cat.id } }))}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }}>
                 <View style={{ width: 52, height: 52, borderRadius: radius.md, backgroundColor: cat.id === 'petrol' ? c.dealSubtle : c.brandSubtle, alignItems: 'center', justifyContent: 'center' }}>
                   <cat.icon size={26} color={cat.id === 'petrol' ? c.dealText : c.brandText} />
@@ -31,7 +31,7 @@ export default function Categories() {
                 <View style={{ flex: 1 }}>
                   <Text style={[type.h3, { color: c.ink }]}>{cat.label}</Text>
                   <Text style={[type.caption, { color: c.inkSecondary }]}>
-                    {cat.id === 'petrol' ? 'Shown once reliable fuel data is connected' : n ? `${n} sample product${n === 1 ? '' : 's'}` : 'Coming soon'}
+                    {cat.id === 'petrol' ? 'National averages from MBIE on Home' : n ? `${n} with verified prices` : 'No verified prices yet'}
                   </Text>
                 </View>
                 <ChevronRight size={20} color={c.inkTertiary} />

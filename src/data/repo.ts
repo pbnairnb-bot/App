@@ -1,23 +1,26 @@
 /*
- * The one place screens get data from. On launch `loadCatalog()` reads stores, products,
- * prices, price history and price-match policies from Supabase; if the phone is offline it
- * falls back to the copy bundled with the app. Barcodes not in the catalogue are looked up on
- * Open Food Facts.
+ * The one place screens get data from. Everything comes from the live Supabase backend:
+ * stores, products, prices (store feeds, approved shopper reports, Open Prices), price
+ * history, price-match policies, MBIE fuel prices and the shopper's alerts. Nothing is
+ * bundled with the app. When the backend can't be reached, `catalogStatus` is 'offline'
+ * and screens say so instead of showing made-up prices.
  */
-import { type Deal, type Filterable, PRICE_MATCH_POLICIES, type PriceMatchPolicy } from '@/design/components';
+import { type Deal, type Filterable, type PriceMatchPolicy } from '@/design/components';
 import { supabase } from '@/lib/supabase';
 import { bestOffer, buildOffers, type Offer, verdict } from './compare';
-import { SAMPLE_ALERTS, SAMPLE_PRICES, SAMPLE_PRODUCTS, SAMPLE_STORES, sampleHistory } from './sample';
-import type { AlertItem, PricePoint, Product, Store, StorePrice } from './types';
+import type { AlertItem, FuelPrice, PricePoint, Product, Store, StorePrice } from './types';
 import type { GeoPoint } from '@/design/components';
 
-// Live catalogue (replaced by loadCatalog), starting from the bundled copy.
-export let stores: Store[] = SAMPLE_STORES;
-let products: Product[] = SAMPLE_PRODUCTS;
-let prices: StorePrice[] = SAMPLE_PRICES;
-let history: Map<string, PricePoint[]> | null = null;
-export let policies: PriceMatchPolicy[] = PRICE_MATCH_POLICIES;
-export let catalogSource: 'live' | 'bundled' = 'bundled';
+// Live catalogue, filled by loadCatalog(). Empty until live data arrives.
+export let stores: Store[] = [];
+let products: Product[] = [];
+let prices: StorePrice[] = [];
+let history = new Map<string, PricePoint[]>();
+export let policies: PriceMatchPolicy[] = [];
+let fuel: FuelPrice[] = [];
+/** 'loading' before the first answer, 'live' once loaded, 'offline' when the last load failed. */
+export let catalogStatus: 'loading' | 'live' | 'offline' = 'loading';
+export let catalogLoadedAt: string | null = null;
 
 async function all<T>(table: string, select = '*', order?: string): Promise<T[]> {
   const out: T[] = [];
@@ -31,42 +34,45 @@ async function all<T>(table: string, select = '*', order?: string): Promise<T[]>
   }
 }
 
-/** Reads the whole catalogue from Supabase. Returns false (and keeps the bundled copy) when offline. */
+/** Reads the live catalogue from Supabase. Returns false when it can't be reached (the last good copy stays). */
 export async function loadCatalog(): Promise<boolean> {
   try {
     type Row = Record<string, any>;
-    const [s, b, p, pr, h, pol] = await Promise.all([
+    const [s, b, p, pr, h, pol, f] = await Promise.all([
       all<Row>('stores'), all<Row>('store_branches'), all<Row>('catalog_products'), all<Row>('prices'),
       all<Row>('price_history', 'product_id,day,price', 'day'), all<Row>('price_match_policies'),
+      all<Row>('fuel_prices', '*', 'date'),
     ]);
     stores = s.map((r) => ({
       id: r.id, name: r.name, short: r.short, color: r.color, logoUrl: r.logo_url ?? undefined, online: r.online,
-      deliveryFee: r.delivery_fee != null ? Number(r.delivery_fee) : undefined, policyRetailer: r.policy_retailer ?? undefined, isSample: r.is_sample,
+      deliveryFee: r.delivery_fee != null ? Number(r.delivery_fee) : undefined, policyRetailer: r.policy_retailer ?? undefined,
       branches: b.filter((x) => x.store_id === r.id).map((x) => ({ lat: x.lat, lng: x.lng })),
     }));
     products = p.map((r) => ({
       id: r.id, barcode: r.barcode ?? undefined, name: r.name, brand: r.brand ?? undefined, size: r.size ?? undefined,
       unitQty: r.unit_qty != null ? Number(r.unit_qty) : undefined, unit: r.unit ?? undefined, category: r.category,
-      imageUrl: r.image_url ?? undefined, isSample: r.is_sample,
+      imageUrl: r.image_url ?? undefined,
     }));
     prices = pr.map((r) => ({
       productId: r.product_id, storeId: r.store_id, price: Number(r.price), wasPrice: r.was_price != null ? Number(r.was_price) : undefined,
       memberPrice: r.member_price != null ? Number(r.member_price) : undefined, memberLabel: r.member_label ?? undefined,
-      checkedAt: r.checked_at, source: r.source, endsAt: r.ends_at ?? undefined, onlineOnly: r.online_only,
+      checkedAt: r.checked_at, source: r.source, sourceName: r.source_name ?? undefined, endsAt: r.ends_at ?? undefined, onlineOnly: r.online_only,
     }));
     history = new Map();
-    h.forEach((r) => { const k = r.product_id as string; if (!history!.has(k)) history!.set(k, []); history!.get(k)!.push({ date: r.day, price: Number(r.price) }); });
-    if (pol.length) {
+    h.forEach((r) => { const k = r.product_id as string; if (!history.has(k)) history.set(k, []); history.get(k)!.push({ date: r.day, price: Number(r.price) }); });
+    fuel = f.map((r) => ({ fuel: r.fuel, date: r.date, centsPerLitre: Number(r.cents_per_litre), source: r.source }));
+    {
       policies = pol.map((r) => ({
         retailer: r.retailer, kind: r.kind, percent: r.percent != null ? Number(r.percent) : undefined, fixed: r.fixed ?? undefined,
         conditions: r.conditions ?? [], priceDropRefundDays: r.price_drop_refund_days ?? undefined, sourceUrl: r.source_url,
         checkedAt: r.checked_at, verified: r.verified, note: r.note ?? undefined,
       }));
     }
-    catalogSource = 'live';
+    catalogStatus = 'live';
+    catalogLoadedAt = new Date().toISOString();
     return true;
   } catch {
-    catalogSource = 'bundled';
+    catalogStatus = 'offline';
     return false;
   }
 }
@@ -83,7 +89,7 @@ export function getOffers(productId: string, at?: GeoPoint): Offer[] {
 }
 
 export function getHistory(productId: string): PricePoint[] {
-  return history ? history.get(productId) ?? [] : sampleHistory(productId);
+  return history.get(productId) ?? [];
 }
 
 /** A product with its best offer, shaped for cards, lists and the shared filters. */
@@ -92,7 +98,6 @@ export interface Listing extends Filterable {
   best: Offer;
   storeCount: number;
   verdictLabel?: string;
-  isSample?: boolean;
 }
 
 export function listings(at?: GeoPoint): Listing[] {
@@ -105,7 +110,7 @@ export function listings(at?: GeoPoint): Listing[] {
       id: product.id, product, best, storeCount: offers.length,
       price: best.price, wasPrice: best.wasPrice, retailer: best.store.name, category: product.category,
       stores: best.store.branches.length ? best.store.branches : undefined, endsAt: best.endsAt,
-      verdictLabel: v?.label, isSample: product.isSample,
+      verdictLabel: v?.label,
     }];
   });
 }
@@ -121,16 +126,16 @@ export function search(query: string, at?: GeoPoint): Listing[] {
   });
 }
 
-/** Today's deals for the banner carousel: only offers with a verified earlier price. */
+/** Today's deals: only current (not stale) offers whose earlier price came from the same verified source. */
 export function deals(at?: GeoPoint): Deal[] {
   return listings(at)
-    .filter((l) => l.best.wasPrice && l.best.wasPrice > l.best.price)
+    .filter((l) => !l.best.stale && l.best.wasPrice && l.best.wasPrice > l.best.price)
     .sort((a, b) => (b.wasPrice! - b.price) / b.wasPrice! - (a.wasPrice! - a.price) / a.wasPrice!)
     .slice(0, 5)
     .map((l, i) => ({
       id: l.product.id, product: `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}`, retailer: l.best.store.name,
       price: l.best.price, wasPrice: l.best.wasPrice, endsAt: l.best.endsAt, storesCompared: l.storeCount,
-      category: l.category, stores: l.stores, label: i === 0 ? 'deal' : undefined, isSample: l.isSample,
+      category: l.category, stores: l.stores, label: i === 0 ? 'deal' : undefined,
     }));
 }
 
@@ -141,7 +146,7 @@ export function findByBarcode(code: string): Product | undefined {
 const toProduct = (r: Record<string, any>): Product => ({
   id: r.id, barcode: r.barcode ?? undefined, name: r.name, brand: r.brand ?? undefined, size: r.size ?? undefined,
   unitQty: r.unit_qty != null ? Number(r.unit_qty) : undefined, unit: r.unit ?? undefined, category: r.category,
-  imageUrl: r.image_url ?? undefined, isSample: r.is_sample,
+  imageUrl: r.image_url ?? undefined,
 });
 
 /** Look up any NZ product by barcode in the full database (including products with no prices yet). */
@@ -160,7 +165,7 @@ export async function searchAllProducts(query: string, limit = 25): Promise<Prod
   const words = query.trim().toLowerCase().split(/\s+/).filter((w) => w.length > 1).slice(0, 4);
   if (!words.length) return [];
   try {
-    let q = supabase.from('products').select('id,barcode,name,brand,size,unit_qty,unit,category,image_url,is_sample').limit(limit);
+    let q = supabase.from('products').select('id,barcode,name,brand,size,unit_qty,unit,category,image_url').limit(limit);
     for (const w of words) q = q.or(`name.ilike.%${w.replace(/[%,()]/g, '')}%,brand.ilike.%${w.replace(/[%,()]/g, '')}%`);
     const { data } = await q;
     const priced = new Set(products.map((p) => p.id));
@@ -173,8 +178,18 @@ export async function productCount(): Promise<number | null> {
   try { const { count } = await supabase.from('products').select('id', { count: 'exact', head: true }); return count ?? null; } catch { return null; }
 }
 
-/** A few catalogue barcodes to try the scanner without a real product. */
-export const sampleBarcodes = () => products.filter((p) => p.barcode && p.isSample).slice(0, 6).map((p) => ({ code: p.barcode!, name: p.name }));
+/** Latest national average pump price for each fuel, plus the week before (MBIE). */
+export function latestFuel(): { fuel: string; now: FuelPrice; before?: FuelPrice }[] {
+  const byFuel = new Map<string, FuelPrice[]>();
+  fuel.forEach((f) => { if (!byFuel.has(f.fuel)) byFuel.set(f.fuel, []); byFuel.get(f.fuel)!.push(f); });
+  return Array.from(byFuel.entries()).map(([name, list]) => {
+    const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
+    return { fuel: name, now: sorted[0], before: sorted[1] };
+  }).sort((a, b) => a.fuel.localeCompare(b.fuel));
+}
+
+/** How many products have at least one real price right now. */
+export const pricedCount = () => new Set(prices.map((p) => p.productId)).size;
 
 /**
  * Live lookup on Open Food Facts (free, open data; images CC BY-SA). Gives the product's
@@ -203,8 +218,16 @@ export async function lookupOpenFoodFacts(code: string): Promise<Product | null>
   }
 }
 
-export function getAlerts(): AlertItem[] {
-  return SAMPLE_ALERTS;
+/** The signed-in shopper's alerts (price drops on favourites, deals, petrol). Empty when signed out. */
+export async function fetchAlerts(): Promise<AlertItem[]> {
+  const { data, error } = await supabase.from('alerts').select('id,kind,title,body,product_id,created_at,read_at').order('created_at', { ascending: false }).limit(100);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, kind: r.kind, title: r.title, body: r.body, productId: r.product_id ?? undefined, at: r.created_at, read: !!r.read_at }));
+}
+
+export async function markAlertsRead(ids: string[]) {
+  if (!ids.length) return;
+  await supabase.from('alerts').update({ read_at: new Date().toISOString() }).in('id', ids);
 }
 
 /** Shopper price report; an admin approves it before it shows to others. Needs sign-in. */

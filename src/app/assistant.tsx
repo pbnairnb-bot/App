@@ -3,7 +3,7 @@ import { ImageIcon, Send, Sparkles, X } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DealBadge, FadeInView, PressableScale, useTheme } from '@/design/components';
+import { FadeInView, PressableScale, useTheme } from '@/design/components';
 import { radius, size, space, type } from '@/design/theme';
 import { ask, type AssistantReply } from '@/data/assistant';
 import { nzd } from '@/data/compare';
@@ -121,7 +121,6 @@ function Bubble({ m }: { m: Msg }) {
           </View>
           <View style={{ alignItems: 'flex-end', gap: 2 }}>
             <Text style={[type.priceMd, { color: c.dealText }]}>{nzd(l.price)}</Text>
-            {l.isSample && <DealBadge tone="sample" />}
           </View>
         </PressableScale>
       ))}

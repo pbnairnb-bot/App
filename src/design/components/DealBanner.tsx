@@ -16,7 +16,7 @@ export function DealBanner({ deal, onPress }: DealBannerProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${deal.product} at ${deal.retailer}, ${formatNZD(deal.price)}${deal.isSample ? ', sample data' : ''}`}
+      accessibilityLabel={`${deal.product} at ${deal.retailer}, ${formatNZD(deal.price)}`}
       onPress={() => onPress?.(deal)}
       style={{
         width: BANNER_WIDTH, flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: c.dealSubtle,
@@ -26,7 +26,6 @@ export function DealBanner({ deal, onPress }: DealBannerProps) {
       <View style={{ flex: 1, gap: space[2] }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[1] }}>
           {deal.label && <DealBadge tone={deal.label} />}
-          {deal.isSample && <DealBadge tone="sample" label="Sample" />}
         </View>
         <Text style={[type.h3, { color: c.ink }]} numberOfLines={2}>{deal.product}</Text>
         <Text style={[type.bodyStrong, { color: c.inkSecondary }]}>{deal.retailer}</Text>

@@ -5,7 +5,7 @@
  * products and prices shown still come from here.
  */
 import { CATEGORY_LABELS } from './categories';
-import { nzd, policiesForCategory, verdict } from './compare';
+import { freshness, nzd, policiesForCategory, verdict } from './compare';
 import { getHistory, getOffers, listings, policies, type Listing } from './repo';
 import type { GeoPoint } from '@/design/components';
 import { supabase } from '@/lib/supabase';
@@ -54,7 +54,7 @@ function categoryIn(text: string): string | undefined {
   return words(text).map((w) => CATEGORY_WORDS[w]).find(Boolean);
 }
 
-const line = (l: Listing) => `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}: ${nzd(l.price)} at ${l.best.store.name}${l.storeCount > 1 ? ` (lowest of ${l.storeCount} stores)` : ''}`;
+const line = (l: Listing) => `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}: ${nzd(l.price)} at ${l.best.store.name}${l.storeCount > 1 ? ` (lowest of ${l.storeCount} stores)` : ''}${l.best.stale ? ` (${freshness(l.best.checkedAt).toLowerCase()}, may have changed)` : ''}`;
 
 /** On-device answer. */
 export function answerLocally(question: string, at?: GeoPoint): AssistantReply {
@@ -145,7 +145,7 @@ export async function ask(question: string, history: Array<{ role: 'user' | 'ass
   const local = answerLocally(question, at);
   const facts = (local.products ?? []).map((l) => ({
     product: `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}`, best: `${nzd(l.price)} at ${l.best.store.name}`,
-    stores: getOffers(l.product.id, at).map((o) => `${o.store.name} ${nzd(o.total)}${o.stale ? ' (old)' : ''}`), sample: !!l.isSample,
+    stores: getOffers(l.product.id, at).map((o) => `${o.store.name} ${nzd(o.total)}${o.stale ? ' (old)' : ''}`),
   }));
   try {
     const call = supabase.functions.invoke('assistant', { body: { question, history: history.slice(-6), facts, localAnswer: local.text } });

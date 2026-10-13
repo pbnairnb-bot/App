@@ -10,8 +10,13 @@ export function unitPrice(price: number, p: Pick<Product, 'unitQty' | 'unit'>): 
   return p.unit === 'each' ? `${nzd(v)} each` : `${nzd(v)}/${p.unit}`;
 }
 
-/** Prices older than this drop out of "Best price" and are shown faded. */
+/**
+ * Prices older than this are shown faded, marked "may be out of date" and never called the
+ * best price. Store feeds refresh daily; shopper and community reports are kept longer.
+ */
 export const STALE_HOURS = 72;
+export const STALE_HOURS_REPORTED = 24 * 14;
+export const staleAfter = (source: string) => (source === 'feed' ? STALE_HOURS : STALE_HOURS_REPORTED);
 
 export function ageHours(iso: string, now = Date.now()) { return (now - Date.parse(iso)) / 3600e3; }
 
@@ -20,7 +25,15 @@ export function freshness(iso: string, now = Date.now()): string {
   if (h < 1) return 'Checked just now';
   if (h < 24) return `Checked ${Math.round(h)} h ago`;
   const d = Math.round(h / 24);
-  return d === 1 ? 'Checked yesterday' : `Checked ${d} days ago`;
+  if (d === 1) return 'Checked yesterday';
+  if (d < 14) return `Checked ${d} days ago`;
+  return `Seen ${new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
+/** Where a price came from, in words: "Open Prices", "Shopper report", "Store feed". */
+export function sourceLabel(p: { source: string; sourceName?: string }): string {
+  if (p.sourceName) return p.sourceName;
+  return p.source === 'feed' ? 'Store feed' : p.source === 'shopper' ? 'Shopper report' : p.source === 'admin' ? 'Checked by PriceMatch' : 'Community report';
 }
 
 export interface Offer extends StorePrice {
@@ -38,7 +51,7 @@ export function buildOffers(prices: StorePrice[], stores: Store[], at?: GeoPoint
       const store = stores.find((s) => s.id === p.storeId)!;
       const km = at && store.branches.length ? Math.min(...store.branches.map((b) => distanceKm(at, b))) : undefined;
       const total = p.onlineOnly && store.deliveryFee ? p.price + store.deliveryFee : p.price;
-      return { ...p, store, km, total, stale: ageHours(p.checkedAt, now) > STALE_HOURS };
+      return { ...p, store, km, total, stale: ageHours(p.checkedAt, now) > staleAfter(p.source) };
     })
     .filter((o) => o.store)
     .sort((a, b) => Number(a.stale) - Number(b.stale) || a.total - b.total || (a.km ?? 1e9) - (b.km ?? 1e9));

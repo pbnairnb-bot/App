@@ -1,7 +1,10 @@
 import type { GeoPoint } from '@/design/components';
 
-/** Where a price came from. Only 'feed' and 'shopper' are real; 'sample' is demo data and always labelled. */
-export type PriceSource = 'feed' | 'shopper' | 'sample';
+/**
+ * Where a price came from. Every price shown is real: a store feed, an approved shopper
+ * report, a price checked by an admin, or an open community database (Open Prices).
+ */
+export type PriceSource = 'feed' | 'shopper' | 'admin' | 'community';
 
 export interface Store {
   id: string;
@@ -18,7 +21,6 @@ export interface Store {
   deliveryFee?: number;
   /** Name in the price-match policy list, when the store has a policy. */
   policyRetailer?: string;
-  isSample?: boolean;
 }
 
 export type Unit = 'L' | 'kg' | 'each';
@@ -35,7 +37,6 @@ export interface Product {
   unit?: Unit;
   category: string;
   imageUrl?: string;
-  isSample?: boolean;
 }
 
 export interface StorePrice {
@@ -50,6 +51,8 @@ export interface StorePrice {
   /** ISO time the price was last checked. */
   checkedAt: string;
   source: PriceSource;
+  /** Named source, e.g. "Open Prices". */
+  sourceName?: string;
   /** Reliable end time for a promotion. */
   endsAt?: string;
   onlineOnly?: boolean;
@@ -78,3 +81,6 @@ export interface AlertItem {
   at: string;
   read?: boolean;
 }
+
+/** National average pump price from MBIE's weekly fuel monitoring. */
+export interface FuelPrice { fuel: string; date: string; centsPerLitre: number; source: string }

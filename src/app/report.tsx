@@ -54,7 +54,7 @@ export default function Report() {
           <FadeInView index={0} style={{ paddingHorizontal: space[4], gap: space[4] }}>
             <Text style={[type.bodyLg, { color: c.inkSecondary }]}>Saw this product on a shelf or online? Tell us the price and we'll add it once it's checked.</Text>
             {field('Product', product, setProduct, { placeholder: 'e.g. Smooth peanut butter 380g' })}
-            {field('Store and suburb', store, setStore, { placeholder: 'e.g. Example Grocer, Ponsonby' })}
+            {field('Store and suburb', store, setStore, { placeholder: 'e.g. Pak’nSave, Albany' })}
             {field('Price (NZD)', price, setPrice, { placeholder: '4.29', keyboardType: 'decimal-pad' })}
             {field('Note (optional)', note, setNote, { placeholder: 'e.g. Special until Sunday' })}
             {error && <Notice tone="error" title="Couldn't send.">{error}</Notice>}

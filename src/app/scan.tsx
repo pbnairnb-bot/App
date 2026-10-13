@@ -9,7 +9,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Button, FadeInView, PressableScale, useTheme } from '@/design/components';
 import { colors, radius, size, space, type } from '@/design/theme';
 import { bestOffer, verdict } from '@/data/compare';
-import { findByBarcode, getHistory, getOffers, sampleBarcodes } from '@/data/repo';
+import { findByBarcode, getHistory, getOffers } from '@/data/repo';
 import { useApp } from '@/state/app-state';
 import { IconButton } from '@/ui/kit';
 
@@ -207,18 +207,6 @@ function Scanner({ onHelp }: { onHelp: () => void }) {
               <Text style={[type.button, { color: d.ink }]}>Type the barcode number</Text>
             </Pressable>
           )}
-          <View style={{ gap: space[2] }}>
-            <Text style={[type.caption, { color: d.inkSecondary }]}>No product handy? Try a sample barcode:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
-              {sampleBarcodes().map((s) => (
-                <Pressable key={s.code} accessibilityRole="button" accessibilityLabel={`Sample: ${s.name}`}
-                  onPress={() => { if (!locked.current) { locked.current = true; handle(s.code); } }}
-                  style={{ minHeight: 40, paddingHorizontal: space[3], borderRadius: radius.full, borderWidth: 1, borderColor: d.border, justifyContent: 'center' }}>
-                  <Text style={[type.caption, { color: d.ink, fontFamily: 'Inter_600SemiBold' }]}>{s.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
         </View>
       </View>
     </View>

@@ -2,9 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Sun, X } from 'lucide-react-native';
 import React from 'react';
 import { Text, View } from 'react-native';
-import { DealBadge, FadeInView, PriceMatchNote, useTheme } from '@/design/components';
+import { FadeInView, PriceMatchNote, useTheme } from '@/design/components';
 import { radius, space, type } from '@/design/theme';
-import { freshness, nzd, policiesForCategory, unitPrice } from '@/data/compare';
+import { freshness, nzd, policiesForCategory, sourceLabel, unitPrice } from '@/data/compare';
 import { getOffers, getProduct, policies as allPolicies } from '@/data/repo';
 import { useApp } from '@/state/app-state';
 import { IconButton, Screen, StoreMark } from '@/ui/kit';
@@ -31,7 +31,6 @@ export default function GetItMatched() {
       <FadeInView index={0} style={{ marginHorizontal: space[4], borderRadius: radius.xl, backgroundColor: c.brandDeep, padding: space[6], gap: space[3] }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={[type.badge, { color: c.deal }]}>Cheaper price found</Text>
-          {product.isSample && <DealBadge tone="sample" />}
         </View>
         <Text style={[type.h2, { color: c.onBrandDeep }]}>{product.name}{product.size ? ` ${product.size}` : ''}</Text>
         {product.barcode && <Text style={[type.body, { color: c.onBrandDeep, opacity: 0.8, letterSpacing: 2 }]}>{product.barcode}</Text>}
@@ -48,7 +47,7 @@ export default function GetItMatched() {
         <View style={{ height: 1, backgroundColor: c.onBrandDeep, opacity: 0.2 }} />
         <Text style={[type.body, { color: c.onBrandDeep }]}>
           {freshness(offer.checkedAt)} ({checked.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}, {checked.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })})
-          {offer.source === 'shopper' ? ' · Reported by a shopper' : offer.source === 'feed' ? ' · From the store’s product feed' : ' · Sample data'}
+          {` · ${sourceLabel(offer)}`}
         </Text>
       </FadeInView>
 

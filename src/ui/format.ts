@@ -2,7 +2,7 @@ import type { Listing } from '@/data/repo';
 
 export function toCard(l: Listing) {
   return {
-    id: l.id, name: `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}`, price: l.price, wasPrice: l.wasPrice, isSample: l.isSample,
+    id: l.id, name: `${l.product.name}${l.product.size ? ` ${l.product.size}` : ''}`, price: l.price, wasPrice: l.wasPrice, imageUrl: l.product.imageUrl,
     where: l.storeCount > 1 ? `${l.best.store.name} · lowest of ${l.storeCount}` : l.best.store.name,
     badge: l.storeCount > 1 && !l.wasPrice ? ('best' as const) : undefined,
   };

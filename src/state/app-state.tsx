@@ -1,14 +1,18 @@
 /*
  * Shopper state kept on the phone: onboarding, favourites, scan history, chosen area and
  * alert preferences. Nothing here needs an account. When a shopper signs in, favourites and
- * scan history are also synced to their account in Supabase (and deleted there when removed).
+ * scan history are also synced to their account in Supabase (and deleted there when removed),
+ * alert preferences and the push token go to `notification_settings`, and their alerts are
+ * read live from the `alerts` table.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import type { ShopperLocation } from '@/design/components';
-import type { ScanRecord } from '@/data/types';
+import type { AlertItem, ScanRecord } from '@/data/types';
 import { supabase } from '@/lib/supabase';
-import { loadCatalog } from '@/data/repo';
+import { registerForPush } from '@/lib/push';
+import { catalogStatus as repoStatus, fetchAlerts, loadCatalog, markAlertsRead } from '@/data/repo';
+import { Platform } from 'react-native';
 import { useAuth } from './auth';
 
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => { const r = (Math.random() * 16) | 0; return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16); });
@@ -59,6 +63,17 @@ interface AppState extends Persisted {
   catalogVersion: number;
   /** Reload prices now (pull to refresh). */
   refreshCatalog: () => Promise<void>;
+  /** Whether live data is loaded, still loading, or couldn't be reached. */
+  catalogStatus: 'loading' | 'live' | 'offline';
+  /** The signed-in shopper's alerts, newest first (empty when signed out). */
+  alertItems: AlertItem[];
+  alertsStatus: 'signed-out' | 'loading' | 'ready' | 'error';
+  unreadAlerts: number;
+  reloadAlerts: () => Promise<void>;
+  markAllAlertsRead: () => void;
+  /** Turn alerts on: asks for notification permission and saves the push token. */
+  enableAlerts: () => Promise<'ok' | 'denied' | 'no-device' | 'error' | 'signed-out'>;
+  pushReady: boolean;
 }
 
 const Ctx = React.createContext<AppState | null>(null);
@@ -105,7 +120,57 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   // Live prices: when any price changes in Supabase, reload the catalogue and redraw.
   const [catalogVersion, setCatalogVersion] = React.useState(0);
-  const refreshCatalog = React.useCallback(async () => { if (await loadCatalog()) setCatalogVersion((v) => v + 1); }, []);
+  const [catalogStatus, setCatalogStatus] = React.useState(repoStatus);
+  const refreshCatalog = React.useCallback(async () => {
+    const ok = await loadCatalog();
+    setCatalogStatus(ok ? 'live' : 'offline');
+    if (ok) setCatalogVersion((v) => v + 1);
+  }, []);
+  // When offline, try again every 30 seconds until live data comes back.
+  React.useEffect(() => {
+    if (catalogStatus !== 'offline') return;
+    const t = setInterval(() => { refreshCatalog(); }, 30000);
+    return () => clearInterval(t);
+  }, [catalogStatus, refreshCatalog]);
+
+  // Alerts from the backend, live while signed in.
+  const [alertItems, setAlertItems] = React.useState<AlertItem[]>([]);
+  const [alertsStatus, setAlertsStatus] = React.useState<AppState['alertsStatus']>('signed-out');
+  const reloadAlerts = React.useCallback(async () => {
+    if (!uid.current) { setAlertItems([]); setAlertsStatus('signed-out'); return; }
+    try { setAlertItems(await fetchAlerts()); setAlertsStatus('ready'); } catch { setAlertsStatus('error'); }
+  }, []);
+  React.useEffect(() => {
+    if (!userId) { setAlertItems([]); setAlertsStatus('signed-out'); return; }
+    setAlertsStatus('loading');
+    reloadAlerts();
+    const channel = supabase.channel(`alerts-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts', filter: `user_id=eq.${userId}` }, () => { reloadAlerts(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, reloadAlerts]);
+
+  // Alert preferences and push token live in notification_settings for the signed-in shopper.
+  const [pushToken, setPushToken] = React.useState<string | null>(null);
+  const syncSettings = React.useCallback(async (prefs: AlertPrefs, token: string | null) => {
+    const u = uid.current;
+    if (!u) return;
+    await supabase.from('notification_settings').upsert({
+      user_id: u, push_token: prefs.enabled ? token : null, platform: Platform.OS,
+      drops: prefs.drops, deals: prefs.deals, petrol: prefs.petrol, quiet_from: prefs.quietFrom, quiet_to: prefs.quietTo,
+      updated_at: new Date().toISOString(),
+    });
+  }, []);
+  // Re-register quietly on launch when alerts are already on and permission was given before.
+  React.useEffect(() => {
+    if (!ready || !userId || !state.alerts.enabled) return;
+    registerForPush().then((r) => { const t = r.ok ? r.token : null; setPushToken(t); syncSettings(stateRef.current.alerts, t).catch(() => {}); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, userId]);
+  React.useEffect(() => {
+    if (!ready || !userId) return;
+    syncSettings(state.alerts, pushToken).catch(() => {});
+  }, [state.alerts, pushToken, ready, userId, syncSettings]);
   React.useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase.channel('live-prices')
@@ -131,6 +196,25 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     update,
     catalogVersion,
     refreshCatalog,
+    catalogStatus,
+    alertItems,
+    alertsStatus,
+    unreadAlerts: alertItems.filter((a) => !a.read).length,
+    reloadAlerts,
+    markAllAlertsRead: () => {
+      const ids = alertItems.filter((a) => !a.read).map((a) => a.id);
+      if (!ids.length) return;
+      setAlertItems((list) => list.map((a) => ({ ...a, read: true })));
+      markAlertsRead(ids).catch(() => {});
+    },
+    pushReady: !!pushToken,
+    enableAlerts: async () => {
+      if (!uid.current) return 'signed-out';
+      const r = await registerForPush();
+      update({ alerts: { ...stateRef.current.alerts, enabled: true } });
+      if (r.ok) { setPushToken(r.token); return 'ok'; }
+      return r.reason === 'denied' ? 'denied' : r.reason === 'simulator' ? 'no-device' : 'error';
+    },
     toggleFavourite: (id) => {
       const f = stateRef.current.favourites;
       const on = !f.includes(id);

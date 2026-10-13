@@ -1,28 +1,30 @@
 import { router } from 'expo-router';
-import { Bell, ChevronRight, Mic, ScanBarcode, Search, ShieldCheck, Sparkles } from 'lucide-react-native';
+import { Bell, ChevronRight, Fuel, Mic, PackageSearch, ScanBarcode, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
 import React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { applyFilters, DealCarousel, FadeInView, LocationPill, PressableScale, ProductCard, useTheme } from '@/design/components';
 import { radius, size, space, type } from '@/design/theme';
 import { CATEGORY_LIST } from '@/data/categories';
 import { nzd } from '@/data/compare';
-import { deals, getAlerts, getOffers, getProduct, listings, policies } from '@/data/repo';
-import { Card, IconButton, Logo, SampleBanner, Screen, SectionHeader, shadow, TAB_BAR_SPACE, VerdictPill } from '@/ui/kit';
+import { deals, getOffers, getProduct, latestFuel, listings, policies, productCount } from '@/data/repo';
+import { Card, IconButton, InfoNote, LiveDataNotice, Logo, Screen, SectionHeader, shadow, TAB_BAR_SPACE, VerdictPill } from '@/ui/kit';
 import { useApp } from '@/state/app-state';
 import { CompareStrip } from '@/ui/compare';
 import { timeAgo, toCard } from '@/ui/format';
 
 export default function Home() {
   const c = useTheme();
-  const { location, scans, favourites, toggleFavourite, readAlerts, catalogVersion, refreshCatalog } = useApp();
-  const unread = getAlerts().filter((a) => !a.read && !readAlerts.includes(a.id)).length;
+  const { location, scans, favourites, toggleFavourite, unreadAlerts: unread, catalogVersion, refreshCatalog, catalogStatus } = useApp();
+  const fuel = React.useMemo(() => latestFuel(), [catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [total, setTotal] = React.useState<number | null>(null);
+  React.useEffect(() => { productCount().then(setTotal); }, [catalogVersion]);
   const todays = React.useMemo(() => deals(location), [location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const near = React.useMemo(() => applyFilters(listings(location), { sort: location ? 'nearest' : 'relevance' }, location).slice(0, 6), [location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const open = (id: string) => router.push({ pathname: '/product/[id]', params: { id } });
   // "Compare at a glance": the deal with the most stores to compare.
   const featured = React.useMemo(() => {
     const ids = [...todays.map((d) => d.id), ...near.map((l) => l.id)];
-    const id = ids.find((x) => getOffers(x, location).length >= 3) ?? ids[0];
+    const id = ids.find((x) => getOffers(x, location).length >= 2);
     const product = id ? getProduct(id) : undefined;
     return product ? { product, offers: getOffers(product.id, location) } : null;
   }, [todays, near, location]);
@@ -57,7 +59,7 @@ export default function Home() {
         <ChevronRight size={20} color={c.brandText} />
       </PressableScale>
 
-      <SampleBanner />
+      <LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} />
 
       {scans.length > 0 && (
         <FadeInView index={0} style={{ marginTop: space[6] }}>
@@ -96,19 +98,57 @@ export default function Home() {
         </FadeInView>
       )}
 
-      <FadeInView index={2} style={{ marginTop: space[6] }}>
-        <SectionHeader title="Today's best deals" action="See all" onAction={() => router.push({ pathname: '/search', params: { sort: 'biggest-saving' } })} />
-        <DealCarousel deals={todays} onPressDeal={(d) => open(d.id)} />
-      </FadeInView>
+      {catalogStatus === 'live' && (
+        <FadeInView index={2} style={{ marginTop: space[6] }}>
+          <SectionHeader title="Today's verified deals" action={todays.length ? 'See all' : undefined} onAction={() => router.push({ pathname: '/search', params: { sort: 'biggest-saving' } })} />
+          {todays.length ? <DealCarousel deals={todays} onPressDeal={(d) => open(d.id)} /> : (
+            <InfoNote icon={Tag} title="No verified deals right now"
+              body="A deal only shows here when a store's own price data confirms the earlier price. We never make up discounts." />
+          )}
+        </FadeInView>
+      )}
 
-      <FadeInView index={2} style={{ marginTop: space[6] }}>
-        <SectionHeader title={location ? 'Best prices near you' : 'Best prices'} action="See all" onAction={() => router.push({ pathname: '/search', params: { sort: location ? 'nearest' : 'relevance' } })} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[2] }}>
-          {near.map((l) => (
-            <ProductCard key={l.id} product={toCard(l)} isFavourite={favourites.includes(l.id)} onPress={() => open(l.id)} onToggleFavourite={() => toggleFavourite(l.id)} />
-          ))}
-        </ScrollView>
-      </FadeInView>
+      {fuel.length > 0 && (
+        <FadeInView index={2} style={{ marginTop: space[6] }}>
+          <SectionHeader title="Petrol and diesel" />
+          <Card style={{ marginHorizontal: space[4], padding: space[4], gap: space[3] }}>
+            {fuel.map((f) => {
+              const diff = f.before ? f.now.centsPerLitre - f.before.centsPerLitre : null;
+              return (
+                <View key={f.fuel} style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}
+                  accessible accessibilityLabel={`${f.fuel}, ${(f.now.centsPerLitre / 100).toFixed(2)} dollars a litre national average`}>
+                  <Fuel size={20} color={c.brandText} />
+                  <Text style={[type.bodyStrong, { color: c.ink, flex: 1 }]}>{f.fuel}</Text>
+                  {diff != null && Math.abs(diff) >= 0.1 && (
+                    <Text style={[type.caption, { color: diff < 0 ? c.dealText : c.warning, fontFamily: 'Inter_600SemiBold' }]}>{diff > 0 ? '+' : '−'}{Math.abs(diff).toFixed(1)}c</Text>
+                  )}
+                  <Text style={[type.priceMd, { color: c.ink }]}>${(f.now.centsPerLitre / 100).toFixed(2)}/L</Text>
+                </View>
+              );
+            })}
+            <Text style={[type.caption, { color: c.inkSecondary }]}>
+              National average pump price, week of {new Date(fuel[0].now.date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}. Source: MBIE fuel price monitoring. Prices at your local station will differ.
+            </Text>
+          </Card>
+        </FadeInView>
+      )}
+
+      {catalogStatus === 'live' && (
+        <FadeInView index={2} style={{ marginTop: space[6] }}>
+          <SectionHeader title={location ? 'Real prices near you' : 'Latest real prices'} action={near.length ? 'See all' : undefined} onAction={() => router.push({ pathname: '/search', params: { sort: location ? 'nearest' : 'relevance' } })} />
+          {near.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[2] }}>
+              {near.map((l) => (
+                <ProductCard key={l.id} product={toCard(l)} isFavourite={favourites.includes(l.id)} onPress={() => open(l.id)} onToggleFavourite={() => toggleFavourite(l.id)} />
+              ))}
+            </ScrollView>
+          ) : (
+            <InfoNote icon={PackageSearch} title="Store prices are still being connected"
+              body={`${total ? `${total.toLocaleString('en-NZ')} NZ products are searchable, ` : ''}but few have verified store prices yet. Seen a price in store? Share it and it appears here once checked.`}
+              action="Share a price" onAction={() => router.push('/report')} />
+          )}
+        </FadeInView>
+      )}
 
       <FadeInView index={3} style={{ marginTop: space[6] }}>
         <SectionHeader title="Popular categories" action="All" onAction={() => router.push('/categories')} />
@@ -133,7 +173,7 @@ export default function Home() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[type.h3, { color: c.onBrandDeep }]}>Stores that price match</Text>
-            <Text style={[type.body, { color: c.onBrandDeep, opacity: 0.85 }]}>{policies.length} NZ stores may match or beat a cheaper price</Text>
+            <Text style={[type.body, { color: c.onBrandDeep, opacity: 0.85 }]}>{policies.length ? `${policies.length} NZ stores may match or beat a cheaper price` : 'See which NZ stores may match a cheaper price'}</Text>
           </View>
           <ChevronRight size={22} color={c.onBrandDeep} />
         </PressableScale>

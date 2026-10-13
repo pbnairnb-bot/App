@@ -1,12 +1,12 @@
 /* App-level building blocks built on the PriceMatch NZ design system. */
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, type LucideIcon } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, CloudOff, Minus, type LucideIcon } from 'lucide-react-native';
 import React from 'react';
 import { Animated, Modal, Pressable, RefreshControl, ScrollView, type StyleProp, Text, useColorScheme, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { Button, DealBadge, duration, easing, PressableScale, useReducedMotion, useTheme } from '@/design/components';
+import { Button, duration, easing, PressableScale, useReducedMotion, useTheme } from '@/design/components';
 import { radius, size, space, type } from '@/design/theme';
 import type { VerdictTone } from '@/data/compare';
 import type { PricePoint, Store } from '@/data/types';
@@ -103,12 +103,43 @@ export function VerdictPill({ label, tone }: { label: string; tone: VerdictTone 
   );
 }
 
-export function SampleBanner({ text = 'Sample prices while live store data is connected' }: { text?: string }) {
+/**
+ * Says plainly when live prices can't be reached, with a retry. Shows nothing while live.
+ * The app never falls back to made-up prices.
+ */
+export function LiveDataNotice({ status, onRetry }: { status: 'loading' | 'live' | 'offline'; onRetry?: () => Promise<void> | void }) {
+  const c = useTheme();
+  const [busy, setBusy] = React.useState(false);
+  if (status === 'live') return null;
+  const offline = status === 'offline';
+  return (
+    <View accessibilityLiveRegion="polite" style={{ marginHorizontal: space[4], marginTop: space[3], padding: space[3], gap: space[2], borderRadius: radius.md,
+      backgroundColor: offline ? c.warningSubtle : c.surfaceMuted, borderWidth: 1, borderColor: offline ? c.warning : c.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+        <CloudOff size={18} color={offline ? c.warning : c.inkSecondary} />
+        <Text style={[type.bodyStrong, { color: c.ink, flex: 1 }]}>{offline ? "Can't load live prices" : 'Loading live prices…'}</Text>
+      </View>
+      {offline && (
+        <>
+          <Text style={[type.body, { color: c.inkSecondary }]}>We couldn't reach the PriceMatch server. Check your internet connection. We don't show old or made-up prices in the meantime.</Text>
+          {onRetry && <View style={{ alignSelf: 'flex-start' }}><Button variant="secondary" disabled={busy} onPress={async () => { setBusy(true); try { await onRetry(); } finally { setBusy(false); } }}>{busy ? 'Trying…' : 'Try again'}</Button></View>}
+        </>
+      )}
+    </View>
+  );
+}
+
+/** A small bordered note used for honest "nothing verified yet" states inside a section. */
+export function InfoNote({ icon: Icon, title, body, action, onAction }: { icon: LucideIcon; title: string; body: string; action?: string; onAction?: () => void }) {
   const c = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginHorizontal: space[4], marginTop: space[3] }}>
-      <DealBadge tone="sample" />
-      <Text style={[type.caption, { color: c.inkSecondary, flex: 1 }]}>{text}</Text>
+    <View style={{ marginHorizontal: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+        <Icon size={20} color={c.brandText} />
+        <Text style={[type.bodyStrong, { color: c.ink, flex: 1 }]}>{title}</Text>
+      </View>
+      <Text style={[type.body, { color: c.inkSecondary }]}>{body}</Text>
+      {action && <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}><Text style={[type.bodyStrong, { color: c.brandText }]}>{action}</Text></Pressable>}
     </View>
   );
 }

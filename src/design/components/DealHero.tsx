@@ -31,7 +31,7 @@ export function DealHero({ deal, onPress, now }: DealHeroProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${h.eyebrow}: ${big ? `${h.headline} off` : h.headline}. ${deal.product} at ${deal.retailer}, ${formatNZD(deal.price)}${deal.isSample ? ', sample data' : ''}`}
+      accessibilityLabel={`${h.eyebrow}: ${big ? `${h.headline} off` : h.headline}. ${deal.product} at ${deal.retailer}, ${formatNZD(deal.price)}`}
       onPress={() => onPress?.(deal)}
       style={{
         width: HERO_WIDTH, minHeight: 184, flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4],
@@ -44,7 +44,6 @@ export function DealHero({ deal, onPress, now }: DealHeroProps) {
           <View style={{ paddingVertical: 3, paddingHorizontal: space[2], borderRadius: radius.sm, backgroundColor: L.eyebrowBg, borderWidth: L.outlineEyebrow ? 1 : 0, borderColor: L.eyebrowFg }}>
             <Text style={[type.badge, { color: L.eyebrowFg }]}>{h.eyebrow}</Text>
           </View>
-          {deal.isSample && <DealBadge tone="sample" label="Sample" />}
         </View>
         <Text style={[big ? { ...type.display, fontSize: 48, lineHeight: 52, letterSpacing: -1.5 } : { ...type.h1, fontSize: h.template === 'countdown' ? 22 : 24, lineHeight: 28 }, { color: L.headline, marginTop: space[1], fontVariant: ['tabular-nums'] }]}>
           {h.headline}
