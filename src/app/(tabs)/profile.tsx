@@ -1,22 +1,22 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { ChevronRight, CircleHelp, FileText, LogOut, MapPin, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, FileText, History, Info, LogOut, MapPin, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react-native';
 import React from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { Button, Notice, SettingToggle, useTheme } from '@/design/components';
 import { useAuth } from '@/state/auth';
+import { formatNzMobile } from '@/lib/phone';
 import { radius, size, space, type } from '@/design/theme';
 import { LEGAL } from '@/config';
 import { useApp } from '@/state/app-state';
-import { Card, ConfirmSheet, Screen, TAB_BAR_SPACE } from '@/ui/kit';
+import { Card, Screen, TAB_BAR_SPACE } from '@/ui/kit';
 
 const QUIET = [{ label: '9 pm – 8 am', from: 21, to: 8 }, { label: '10 pm – 7 am', from: 22, to: 7 }, { label: 'Off', from: 0, to: 0 }];
 
 export default function Profile() {
   const c = useTheme();
-  const { location, alerts, update, keepScanHistory, scans, clearScans, catalogStatus, enableAlerts, pushReady } = useApp();
+  const { location, alerts, update, catalogStatus, enableAlerts, pushReady, scans } = useApp();
   const [pushMsg, setPushMsg] = React.useState<string | null>(null);
-  const [confirm, setConfirm] = React.useState(false);
   const auth = useAuth();
   const bioLabel = auth.biometric.kind === 'face' ? 'Face ID' : 'fingerprint';
   const setAlerts = (patch: Partial<typeof alerts>) => update({ alerts: { ...alerts, ...patch } });
@@ -30,15 +30,15 @@ export default function Profile() {
           <UserRound size={26} color={c.brandText} />
         </View>
         <View style={{ flex: 1, gap: space[2] }}>
-          {auth.email ? (
+          {auth.account ? (
             <>
-              <Text style={[type.h3, { color: c.ink }]} numberOfLines={1}>{auth.email}</Text>
-              <Text style={[type.body, { color: c.inkSecondary }]}>Favourites and scans are saved to your account.</Text>
+              <Text style={[type.h3, { color: c.ink }]} numberOfLines={1}>{auth.account.startsWith('+64') ? formatNzMobile(auth.account) : auth.account}</Text>
+              <Text style={[type.body, { color: c.inkSecondary }]}>Favourites and price alerts are saved to your account.</Text>
             </>
           ) : (
             <>
               <Text style={[type.h3, { color: c.ink }]}>Using PriceMatch NZ as a guest</Text>
-              <Text style={[type.body, { color: c.inkSecondary }]}>Sign in with a code to keep favourites and scans on all your devices.</Text>
+              <Text style={[type.body, { color: c.inkSecondary }]}>Sign in with your mobile number to keep favourites and price alerts on all your devices.</Text>
               <View style={{ alignSelf: 'flex-start' }}><Button onPress={() => router.push('/sign-in')}>Sign in</Button></View>
             </>
           )}
@@ -47,13 +47,14 @@ export default function Profile() {
 
       <Group title="Shopping">
         <LinkRow icon={MapPin} label="Your area" value={location?.label ?? 'Not set'} onPress={() => router.push('/location')} />
+        <LinkRow icon={History} label="Scan History" value={scans.length ? `${scans.length}` : undefined} onPress={() => router.push('/history')} />
         <LinkRow icon={ShieldCheck} label="Stores that price match" onPress={() => router.push('/stores')} />
-        <LinkRow icon={CircleHelp} label="How scanning works" onPress={() => { update({ scanGuideSeen: false }); router.push('/scan'); }} last />
+        <LinkRow icon={Info} label="Where our data comes from" onPress={() => router.push('/sources')} last />
       </Group>
 
       <Group title="Alerts">
         <View style={{ padding: space[4], gap: space[2] }}>
-          {!auth.email ? (
+          {!auth.account ? (
             <>
               <Text style={[type.body, { color: c.inkSecondary }]}>Sign in to get alerts when a saved product drops in price. Alerts belong to your account.</Text>
               <View style={{ alignSelf: 'flex-start' }}><Button variant="secondary" onPress={() => router.push('/sign-in')}>Sign in</Button></View>
@@ -83,33 +84,27 @@ export default function Profile() {
           </View>
           <View style={{ marginTop: space[2] }}>
             {pushMsg ? <Notice tone="warning" title="Notifications not on.">{pushMsg}</Notice>
-              : alerts.enabled && auth.email ? <Notice tone="info" title={pushReady ? 'Notifications are on.' : 'Setting up notifications…'}>Alerts also stay in the Alerts screen. Quiet hours use New Zealand time.</Notice> : null}
+              : alerts.enabled && auth.account ? <Notice tone="info" title={pushReady ? 'Notifications are on.' : 'Setting up notifications…'}>Alerts also stay in the Alerts screen. Quiet hours use New Zealand time.</Notice> : null}
           </View>
         </View>
       </Group>
 
       <Group title="Privacy">
-        <View style={{ paddingHorizontal: space[4], paddingTop: space[2] }}>
-          <SettingToggle title="Save scan history" description="Kept on this phone. Turn off to stop saving scans." value={keepScanHistory} onValueChange={(v) => update({ keepScanHistory: v })} />
-        </View>
-        <LinkRow icon={Trash2} label="Clear scan history" value={scans.length ? `${scans.length}` : 'Empty'} danger onPress={() => scans.length && setConfirm(true)} />
-        {auth.email && auth.biometric.kind && (
+        {auth.account && auth.biometric.kind && (
           <View style={{ paddingHorizontal: space[4] }}>
             <SettingToggle title={`Unlock with ${bioLabel}`} description="Your fingerprint or face never leaves this phone." value={auth.biometric.enabled}
               onValueChange={async (v) => { if (v) { if (auth.session) await auth.biometric.enable(auth.session.refresh_token); } else await auth.biometric.disable(); }} />
           </View>
         )}
         <LinkRow icon={FileText} label="Privacy Policy" onPress={() => LEGAL.privacy && Linking.openURL(LEGAL.privacy)} value={LEGAL.privacy ? undefined : 'Before launch'} />
-        <LinkRow icon={FileText} label="Terms of Use" onPress={() => LEGAL.terms && Linking.openURL(LEGAL.terms)} value={LEGAL.terms ? undefined : 'Before launch'} last={!auth.email} />
-        {auth.email && <LinkRow icon={LogOut} label="Sign out" danger onPress={() => auth.signOut()} last />}
+        <LinkRow icon={FileText} label="Terms of Use" onPress={() => LEGAL.terms && Linking.openURL(LEGAL.terms)} value={LEGAL.terms ? undefined : 'Before launch'} last={!auth.account} />
+        {auth.account && <LinkRow icon={LogOut} label="Sign out" danger onPress={() => auth.signOut()} last />}
       </Group>
 
       <Text style={[type.caption, { color: c.inkTertiary, textAlign: 'center', marginTop: space[6] }]}>
         PriceMatch NZ {Constants.expoConfig?.version ?? ''} · Free for New Zealanders{'\n'}{catalogStatus === 'live' ? 'Connected to live price data' : catalogStatus === 'offline' ? "Can't reach live price data" : 'Loading live price data'} · Only real, sourced prices are shown
       </Text>
 
-      <ConfirmSheet visible={confirm} danger icon={Trash2} title="Clear your scan history?" body={`This removes all ${scans.length} scans from PriceMatch NZ. It can't be undone.`}
-        confirmLabel="Clear all" onCancel={() => setConfirm(false)} onConfirm={() => { clearScans(); setConfirm(false); }} />
     </Screen>
   );
 }

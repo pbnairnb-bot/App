@@ -47,13 +47,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PriceMatch NZ uses your camera to scan product barcodes. Photos are never saved."
+          "cameraPermission": "PriceMatch NZ uses your camera only to read product barcodes. Photos are never taken or saved."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "PriceMatch NZ uses your location to show prices and deals at stores near you."
+          "locationWhenInUsePermission": "PriceMatch NZ uses your location to find fuel stations and stores near you. It's only used while the app is open."
         }
       ],
       [

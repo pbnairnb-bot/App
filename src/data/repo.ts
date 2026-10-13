@@ -56,7 +56,8 @@ export async function loadCatalog(): Promise<boolean> {
     prices = pr.map((r) => ({
       productId: r.product_id, storeId: r.store_id, price: Number(r.price), wasPrice: r.was_price != null ? Number(r.was_price) : undefined,
       memberPrice: r.member_price != null ? Number(r.member_price) : undefined, memberLabel: r.member_label ?? undefined,
-      checkedAt: r.checked_at, source: r.source, sourceName: r.source_name ?? undefined, endsAt: r.ends_at ?? undefined, onlineOnly: r.online_only,
+      checkedAt: r.checked_at, source: r.source, sourceName: r.source_name ?? undefined,
+      productUrl: r.product_url ?? undefined, availability: r.availability ?? undefined, endsAt: r.ends_at ?? undefined, onlineOnly: r.online_only,
     }));
     history = new Map();
     h.forEach((r) => { const k = r.product_id as string; if (!history.has(k)) history.set(k, []); history.get(k)!.push({ date: r.day, price: Number(r.price) }); });

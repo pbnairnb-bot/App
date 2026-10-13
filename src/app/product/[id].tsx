@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Heart, ImageIcon, PackageSearch, Share2, ShieldCheck, Store as StoreIcon } from 'lucide-react-native';
+import { ExternalLink, Heart, ImageIcon, PackageSearch, Share2, ShieldCheck, Store as StoreIcon } from 'lucide-react-native';
 import React from 'react';
-import { Share, Text, useWindowDimensions, View } from 'react-native';
+import { Linking, Pressable, Share, Text, useWindowDimensions, View } from 'react-native';
 import { Button, FadeInView, PriceBlock, PriceMatchBadge, useTheme } from '@/design/components';
 import { radius, space, type } from '@/design/theme';
 import { CATEGORY_LABELS } from '@/data/categories';
@@ -49,6 +49,7 @@ export default function ProductScreen() {
 
       <FadeInView index={0} style={{ paddingHorizontal: space[4], gap: space[3] }}>
         <ProductImage product={product} />
+        {product.imageUrl && product.id.startsWith('off-') && <Text style={[type.caption, { color: c.inkTertiary }]}>Photo and details: Open Food Facts (CC BY-SA)</Text>}
         <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
           <Text style={[type.caption, { color: c.inkSecondary }]}>{CATEGORY_LABELS[product.category] ?? product.category}{product.barcode ? ` · ${product.barcode}` : ''}</Text>
         </View>
@@ -76,6 +77,9 @@ export default function ProductScreen() {
                 </Text>
               </View>
             </View>
+            {best.wasPrice != null && <Text style={[type.caption, { color: c.dealText, fontFamily: 'Inter_600SemiBold' }]}>Promotional price{best.endsAt ? ` until ${new Date(best.endsAt).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''} · was {nzd(best.wasPrice)} (from {sourceLabel(best)})</Text>}
+            {best.availability && <Text style={[type.caption, { color: best.availability === 'out_of_stock' ? c.danger : c.inkSecondary }]}>{AVAIL[best.availability]}</Text>}
+            {best.productUrl && <Button block variant="secondary" icon={ExternalLink} onPress={() => Linking.openURL(best.productUrl!)}>{`View at ${best.store.name}`}</Button>}
             {best.onlineOnly && best.total > best.price && <Text style={[type.body, { color: c.inkSecondary }]}>{nzd(best.total)} with {nzd(best.total - best.price)} delivery</Text>}
             {v && (
               <View style={{ gap: 4 }}>
@@ -116,7 +120,7 @@ export default function ProductScreen() {
             {offers.map((o, i) => <OfferRow key={o.storeId} offer={o} product={product} first={i === 0} best={o === best} />)}
           </Card>
           <Text style={[type.caption, { color: c.inkSecondary, marginHorizontal: space[4], marginTop: space[2] }]}>
-            Sorted by price including delivery. Each price shows where it came from and when. Older prices are faded and may be out of date.
+            Same product and pack size at every store (matched by barcode). Sorted by price including delivery. Each price shows its source and when it was checked; older prices are faded and may be out of date.
           </Text>
           <View style={{ marginHorizontal: space[4], marginTop: space[2] }}>
             <Button block variant="secondary" onPress={() => router.push({ pathname: '/report', params: { name: title, barcode: product.barcode, productId: product.id } })}>Seen a different price? Tell us</Button>
@@ -156,6 +160,8 @@ function ProductImage({ product }: { product: Product }) {
   );
 }
 
+const AVAIL = { in_stock: 'In stock (store data)', low_stock: 'Low stock (store data)', out_of_stock: 'Out of stock (store data)' } as const;
+
 function OfferRow({ offer: o, product, first, best }: { offer: Offer; product: Product; first: boolean; best: boolean }) {
   const c = useTheme();
   const up = unitPrice(o.price, product);
@@ -168,6 +174,8 @@ function OfferRow({ offer: o, product, first, best }: { offer: Offer; product: P
         <Text style={[type.caption, { color: c.inkSecondary }]} numberOfLines={2}>
           {[o.km != null ? formatKm(o.km) : o.onlineOnly ? `Online${o.store.deliveryFee ? ` · +${nzd(o.store.deliveryFee)} delivery` : ''}` : null, freshness(o.checkedAt), sourceLabel(o)].filter(Boolean).join(' · ')}
         </Text>
+        {o.availability && <Text style={[type.caption, { color: o.availability === 'out_of_stock' ? c.danger : c.inkSecondary }]}>{AVAIL[o.availability]}</Text>}
+        {o.productUrl && <Pressable accessibilityRole="link" onPress={() => Linking.openURL(o.productUrl!)} hitSlop={6}><Text style={[type.caption, { color: c.brandText, fontFamily: 'Inter_600SemiBold' }]}>View at {o.store.name}</Text></Pressable>}
         {o.memberPrice != null && <Text style={[type.caption, { color: c.brandText, fontFamily: 'Inter_600SemiBold' }]}>{o.memberLabel ?? 'Member price'} {nzd(o.memberPrice)}</Text>}
       </View>
       <View style={{ alignItems: 'flex-end' }}>

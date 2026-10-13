@@ -53,6 +53,10 @@ export interface StorePrice {
   source: PriceSource;
   /** Named source, e.g. "Open Prices". */
   sourceName?: string;
+  /** Retailer's product page (from the retailer's feed). */
+  productUrl?: string;
+  /** Stock status, only when the source provides it. */
+  availability?: 'in_stock' | 'low_stock' | 'out_of_stock';
   /** Reliable end time for a promotion. */
   endsAt?: string;
   onlineOnly?: boolean;
@@ -69,7 +73,10 @@ export interface ScanRecord {
   bestPrice?: number;
   bestStore?: string;
   verdict?: string;
+  imageUrl?: string;
+  /** Most recent scan time; one entry per barcode. */
   scannedAt: string;
+  scanCount?: number;
 }
 
 export interface AlertItem {
@@ -84,3 +91,18 @@ export interface AlertItem {
 
 /** National average pump price from MBIE's weekly fuel monitoring. */
 export interface FuelPrice { fuel: string; date: string; centsPerLitre: number; source: string }
+
+export type FuelType = '91' | '95' | '98' | 'diesel';
+
+/** A real NZ fuel station (OpenStreetMap). `fuels` is empty when the station's fuels aren't mapped. */
+export interface FuelStation {
+  id: string; name?: string; brand?: string; lat: number; lng: number;
+  address?: string; fuels: FuelType[]; openingHours?: string; sourceRef?: string;
+}
+
+/** A station pump price from a licensed feed. */
+export interface StationPrice { stationId: string; fuel: FuelType; centsPerLitre: number; observedAt: string; sourceName: string }
+
+export interface FuelAlertRule { id: string; fuel: FuelType; maxCents: number; lat: number; lng: number; radiusKm: number; label?: string; lastAlertedAt?: string }
+
+export interface SourceStatus { source: string; ok: boolean; checkedAt: string; rows?: number; message?: string; lastSuccessAt?: string }

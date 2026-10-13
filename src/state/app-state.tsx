@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import type { ShopperLocation } from '@/design/components';
-import type { AlertItem, ScanRecord } from '@/data/types';
+import type { AlertItem, FuelType, ScanRecord } from '@/data/types';
 import { supabase } from '@/lib/supabase';
 import { registerForPush } from '@/lib/push';
 import { catalogStatus as repoStatus, fetchAlerts, loadCatalog, markAlertsRead } from '@/data/repo';
@@ -37,6 +37,7 @@ interface Persisted {
   location?: ShopperLocation;
   alerts: AlertPrefs;
   readAlerts: string[];
+  preferredFuel: FuelType;
 }
 
 const DEFAULTS: Persisted = {
@@ -47,6 +48,7 @@ const DEFAULTS: Persisted = {
   keepScanHistory: true,
   alerts: { enabled: false, deals: true, drops: true, petrol: false, quietFrom: 21, quietTo: 8 },
   readAlerts: [],
+  preferredFuel: '91',
 };
 
 const KEY = 'pm.state.v1';
@@ -100,19 +102,21 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const [{ data: favs }, { data: scans }] = await Promise.all([
         supabase.from('favourites').select('product_id'),
-        supabase.from('scan_history').select('*').order('scanned_at', { ascending: false }).limit(100),
+        supabase.from('scan_history').select('*').order('scanned_at', { ascending: false }).limit(200),
       ]);
       const local = stateRef.current;
       const remoteFavs = (favs ?? []).map((f) => f.product_id as string);
       const pushFavs = local.favourites.filter((f) => !remoteFavs.includes(f) && !f.startsWith('off-'));
       if (pushFavs.length) await supabase.from('favourites').upsert(pushFavs.map((product_id) => ({ user_id: userId, product_id })));
-      const remoteScans: ScanRecord[] = (scans ?? []).map((r) => ({
-        id: r.id, barcode: r.barcode, productId: r.product_id ?? undefined, name: r.name, bestPrice: r.best_price != null ? Number(r.best_price) : undefined,
-        bestStore: r.best_store ?? undefined, verdict: r.verdict ?? undefined, scannedAt: r.scanned_at,
-      }));
-      const pushScans = local.scans.filter((sc) => !remoteScans.some((r) => r.id === sc.id)).map((sc) => ({ ...sc, id: isUuid(sc.id) ? sc.id : uuid() }));
-      if (pushScans.length) await supabase.from('scan_history').upsert(pushScans.map((sc) => toRow(sc, userId)));
-      const merged = [...pushScans, ...remoteScans].sort((a, b) => b.scannedAt.localeCompare(a.scannedAt)).slice(0, 100);
+      const remoteScans: ScanRecord[] = (scans ?? []).map(fromRow);
+      // Scans made on this phone before signing in: add the ones the account doesn't have yet (one entry per barcode).
+      const pushScans = local.scans.filter((sc) => !remoteScans.some((r) => r.barcode === sc.barcode));
+      const pushed: ScanRecord[] = [];
+      for (const sc of pushScans) {
+        const { data } = await supabase.rpc('record_scan', rpcArgs(sc));
+        pushed.push(data ? fromRow(data) : sc);
+      }
+      const merged = [...pushed, ...remoteScans].sort((a, b) => b.scannedAt.localeCompare(a.scannedAt)).slice(0, 200);
       update({ favourites: Array.from(new Set([...local.favourites, ...remoteFavs])), scans: merged });
     })().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +162,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     await supabase.from('notification_settings').upsert({
       user_id: u, push_token: prefs.enabled ? token : null, platform: Platform.OS,
       drops: prefs.drops, deals: prefs.deals, petrol: prefs.petrol, quiet_from: prefs.quietFrom, quiet_to: prefs.quietTo,
+      preferred_fuel: stateRef.current.preferredFuel,
       updated_at: new Date().toISOString(),
     });
   }, []);
@@ -170,7 +175,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!ready || !userId) return;
     syncSettings(state.alerts, pushToken).catch(() => {});
-  }, [state.alerts, pushToken, ready, userId, syncSettings]);
+  }, [state.alerts, state.preferredFuel, pushToken, ready, userId, syncSettings]);
   React.useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase.channel('live-prices')
@@ -226,26 +231,29 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     },
     addScan: (s) => {
       if (!stateRef.current.keepScanHistory) return;
-      const old = stateRef.current.scans.filter((x) => x.barcode === s.barcode);
+      // One entry per barcode: scanning again moves it to the top with the new time.
+      const old = stateRef.current.scans.find((x) => x.barcode === s.barcode);
       const rest = stateRef.current.scans.filter((x) => x.barcode !== s.barcode);
-      const rec: ScanRecord = { ...s, id: uuid(), scannedAt: new Date().toISOString() };
-      update({ scans: [rec, ...rest].slice(0, 100) });
-      const u = uid.current;
-      if (u) {
-        if (old.length) supabase.from('scan_history').delete().in('id', old.map((o) => o.id).filter(isUuid)).then(() => {}, () => {});
-        supabase.from('scan_history').insert(toRow(rec, u)).then(() => {}, () => {});
+      const rec: ScanRecord = { ...old, ...s, imageUrl: s.imageUrl ?? old?.imageUrl, id: old?.id ?? uuid(), scannedAt: new Date().toISOString(), scanCount: (old?.scanCount ?? 0) + 1 };
+      update({ scans: [rec, ...rest].slice(0, 200) });
+      if (uid.current) {
+        supabase.rpc('record_scan', rpcArgs(rec)).then(({ data }) => {
+          if (!data) return;
+          const saved = fromRow(data);
+          update({ scans: stateRef.current.scans.map((x) => (x.barcode === saved.barcode ? { ...x, id: saved.id, scanCount: saved.scanCount } : x)) });
+        }, () => {});
       }
     },
     removeScan: (id) => {
       const found = stateRef.current.scans.find((x) => x.id === id);
       update({ scans: stateRef.current.scans.filter((x) => x.id !== id) });
-      if (uid.current && isUuid(id)) supabase.from('scan_history').delete().eq('id', id).then(() => {}, () => {});
+      if (uid.current && found) supabase.from('scan_history').delete().eq('barcode', found.barcode).then(() => {}, () => {});
       return found;
     },
     restoreScan: (s) => {
-      const list = [...stateRef.current.scans.filter((x) => x.id !== s.id), s].sort((a, b) => b.scannedAt.localeCompare(a.scannedAt));
+      const list = [...stateRef.current.scans.filter((x) => x.barcode !== s.barcode), s].sort((a, b) => b.scannedAt.localeCompare(a.scannedAt));
       update({ scans: list });
-      if (uid.current && isUuid(s.id)) supabase.from('scan_history').upsert(toRow(s, uid.current)).then(() => {}, () => {});
+      if (uid.current) supabase.from('scan_history').upsert(toRow(s, uid.current), { onConflict: 'user_id,barcode' }).then(() => {}, () => {});
     },
     clearScans: () => {
       update({ scans: [] });
@@ -263,5 +271,17 @@ export function useApp(): AppState {
 }
 
 function toRow(s: ScanRecord, userId: string) {
-  return { id: s.id, user_id: userId, barcode: s.barcode, product_id: s.productId ?? null, name: s.name, best_price: s.bestPrice ?? null, best_store: s.bestStore ?? null, verdict: s.verdict ?? null, scanned_at: s.scannedAt };
+  return { ...(isUuid(s.id) ? { id: s.id } : {}), user_id: userId, barcode: s.barcode, product_id: s.productId ?? null, name: s.name, image_url: s.imageUrl ?? null,
+    best_price: s.bestPrice ?? null, best_store: s.bestStore ?? null, verdict: s.verdict ?? null, scanned_at: s.scannedAt, scan_count: s.scanCount ?? 1 };
+}
+
+function rpcArgs(s: ScanRecord) {
+  return { p_barcode: s.barcode, p_product_id: s.productId ?? null, p_name: s.name,
+    p_image_url: s.imageUrl ?? null, p_best_price: s.bestPrice ?? null, p_best_store: s.bestStore ?? null, p_scanned_at: s.scannedAt };
+}
+
+function fromRow(r: Record<string, any>): ScanRecord {
+  return { id: r.id, barcode: r.barcode, productId: r.product_id ?? undefined, name: r.name, imageUrl: r.image_url ?? undefined,
+    bestPrice: r.best_price != null ? Number(r.best_price) : undefined, bestStore: r.best_store ?? undefined, verdict: r.verdict ?? undefined,
+    scannedAt: r.scanned_at, scanCount: r.scan_count ?? 1 };
 }

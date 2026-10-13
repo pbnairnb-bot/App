@@ -8,27 +8,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Button, FadeInView, PressableScale, useTheme } from '@/design/components';
 import { colors, radius, size, space, type } from '@/design/theme';
-import { bestOffer, verdict } from '@/data/compare';
-import { findByBarcode, getHistory, getOffers } from '@/data/repo';
 import { useApp } from '@/state/app-state';
 import { IconButton } from '@/ui/kit';
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const;
 
-/** Opens the product for a scanned code and records it in the shopper's scan history. */
+/** Opens the lookup for a scanned code; the lookup screen identifies it, records it in Scan History and shows prices. */
 function useHandleCode() {
-  const { addScan, location } = useApp();
   return React.useCallback((code: string) => {
-    const product = findByBarcode(code);
-    if (product) {
-      const best = bestOffer(getOffers(product.id, location));
-      const v = best ? verdict(getHistory(product.id), best.price) : null;
-      addScan({ barcode: code, productId: product.id, name: `${product.name}${product.size ? ` ${product.size}` : ''}`, bestPrice: best?.price, bestStore: best?.store.name, verdict: v?.label });
-      router.replace({ pathname: '/product/[id]', params: { id: product.id, from: 'scan' } });
-    } else {
-      router.replace({ pathname: '/barcode/[code]', params: { code } });
-    }
-  }, [addScan, location]);
+    router.replace({ pathname: '/barcode/[code]', params: { code, from: 'scan' } });
+  }, []);
 }
 
 export default function ScanScreen() {

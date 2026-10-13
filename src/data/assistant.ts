@@ -132,8 +132,8 @@ export function answerLocally(question: string, at?: GeoPoint): AssistantReply {
     if (inCat.length) return { text: `Here are some ${CATEGORY_LABELS[cat]?.toLowerCase()} prices:`, products: inCat, actions: [{ label: `Browse ${CATEGORY_LABELS[cat]}`, href: `/search?category=${cat}` }] };
   }
   return {
-    text: "I couldn't find that in our prices yet. Try another name, scan its barcode, or tell us a price you've seen so everyone can compare it.",
-    actions: [{ label: 'Scan a barcode', href: '/scan' }, { label: 'Share a price', href: `/report?name=${encodeURIComponent(q)}` }],
+    text: "I couldn't find that in our prices yet. Try another name, type its barcode number, or tell us a price you've seen so everyone can compare it.",
+    actions: [{ label: 'Share a price', href: `/report?name=${encodeURIComponent(q)}` }],
   };
 }
 

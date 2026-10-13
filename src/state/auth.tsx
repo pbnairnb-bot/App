@@ -1,5 +1,5 @@
 /*
- * Optional sign-in: a 6-digit code by email (Supabase Auth), then a one-time offer to unlock
+ * Optional sign-in: a 6-digit code by SMS to an NZ mobile (Supabase Phone Auth), then a one-time offer to unlock
  * with fingerprint / Face ID. The fingerprint never leaves the phone; it only releases the
  * session kept in the phone's secure storage.
  */
@@ -10,14 +10,16 @@ import { supabase } from '@/lib/supabase';
 
 interface AuthState {
   session: Session | null;
-  email?: string;
+  /** The signed-in mobile number (E.164), or an older email account. */
+  account?: string;
   userId?: string;
   ready: boolean;
   /** Signed in with fingerprint unlock on, waiting for the fingerprint at launch. */
   locked: boolean;
   biometric: ReturnType<typeof useBiometricLogin>;
-  sendCode: (email: string) => Promise<void>;
-  verifyCode: (email: string, code: string) => Promise<Session>;
+  /** Sends a 6-digit code by SMS. `phone` must already be E.164 (+64…). */
+  sendCode: (phone: string) => Promise<void>;
+  verifyCode: (phone: string, code: string) => Promise<Session>;
   unlock: () => Promise<boolean>;
   signOut: () => Promise<void>;
 }
@@ -55,14 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthState = {
     session, ready, locked, biometric,
-    email: session?.user.email ?? undefined,
+    account: session?.user.phone ? `+${session.user.phone.replace(/^\+/, '')}` : session?.user.email ?? undefined,
     userId: session?.user.id,
-    sendCode: async (email) => {
-      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
+    sendCode: async (phone) => {
+      const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true, channel: 'sms' } });
       if (error) throw error;
     },
-    verifyCode: async (email, code) => {
-      const { data, error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code, type: 'email' });
+    verifyCode: async (phone, code) => {
+      const { data, error } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
       if (error || !data.session) throw error ?? new Error('That code didn’t work. Check it and try again.');
       return data.session;
     },

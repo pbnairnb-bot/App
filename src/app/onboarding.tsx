@@ -68,7 +68,7 @@ function AlertArt() {
 
 const PAGES: Page[] = [
   { key: 'compare', eyebrow: 'What is PriceMatch NZ?', art: CompareArt, title: 'Compare Prices. Save More.',
-    body: 'A free app for New Zealanders. Scan a barcode or search any product to see what it costs at each store, with the best price first.' },
+    body: 'A free app for New Zealanders. Search products and compare verified prices across NZ stores, and find fuel stations near you.' },
   { key: 'match', eyebrow: 'Found it cheaper?', art: MatchArt, title: 'Get it price matched',
     body: `${policies.length} NZ stores may match or beat a cheaper price. We show where to ask, and give you a card to show at the counter.` },
   { key: 'alerts', eyebrow: 'Buy at the right time', art: AlertArt, title: 'Never miss a deal',

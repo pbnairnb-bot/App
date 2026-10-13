@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, ChevronRight, Fuel, Mic, PackageSearch, ScanBarcode, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
+import { Bell, ChevronRight, Fuel, History, Mic, PackageSearch, ScanBarcode, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
 import React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { applyFilters, DealCarousel, FadeInView, LocationPill, PressableScale, ProductCard, useTheme } from '@/design/components';
@@ -14,7 +14,7 @@ import { timeAgo, toCard } from '@/ui/format';
 
 export default function Home() {
   const c = useTheme();
-  const { location, scans, favourites, toggleFavourite, unreadAlerts: unread, catalogVersion, refreshCatalog, catalogStatus } = useApp();
+  const { location, favourites, toggleFavourite, unreadAlerts: unread, catalogVersion, refreshCatalog, catalogStatus } = useApp();
   const fuel = React.useMemo(() => latestFuel(), [catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const [total, setTotal] = React.useState<number | null>(null);
   React.useEffect(() => { productCount().then(setTotal); }, [catalogVersion]);
@@ -42,10 +42,24 @@ export default function Home() {
         style={{ marginHorizontal: space[4], marginTop: space[4], flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 52, paddingLeft: space[4], paddingRight: space[1],
           borderRadius: radius.full, backgroundColor: c.surface, borderWidth: 1, borderColor: c.borderStrong }}>
         <Search size={size.iconMd} color={c.inkTertiary} />
-        <Text style={[type.bodyLg, { color: c.inkTertiary, flex: 1 }]} numberOfLines={1}>Search or scan</Text>
+        <Text style={[type.bodyLg, { color: c.inkTertiary, flex: 1 }]} numberOfLines={1}>Search products</Text>
         <IconButton icon={Mic} label="Search by voice" flat color={c.brandText} onPress={() => router.push({ pathname: '/search', params: { voice: '1' } })} />
         <IconButton icon={ScanBarcode} label="Scan a barcode" flat color={c.brandText} onPress={() => router.push('/scan')} />
       </PressableScale>
+
+      <View style={{ flexDirection: 'row', gap: space[2], marginHorizontal: space[4], marginTop: space[3] }}>
+        {[
+          { icon: ScanBarcode, label: 'Scan', onPress: () => router.push('/scan') },
+          { icon: History, label: 'Scan History', onPress: () => router.push('/history') },
+          { icon: Fuel, label: 'Fuel', onPress: () => router.push('/fuel') },
+        ].map((q) => (
+          <PressableScale key={q.label} accessibilityRole="button" accessibilityLabel={q.label} onPress={q.onPress}
+            style={{ flex: 1, alignItems: 'center', gap: 4, paddingVertical: space[3], borderRadius: radius.lg, backgroundColor: c.surface, ...shadow }}>
+            <q.icon size={22} color={c.brandText} />
+            <Text style={[type.caption, { color: c.ink, fontFamily: 'Inter_600SemiBold' }]}>{q.label}</Text>
+          </PressableScale>
+        ))}
+      </View>
 
       <PressableScale accessibilityRole="button" accessibilityLabel="Ask the shopping assistant" onPress={() => router.push('/assistant')}
         style={{ marginHorizontal: space[4], marginTop: space[3], flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.lg, backgroundColor: c.brandSubtle }}>
@@ -60,33 +74,6 @@ export default function Home() {
       </PressableScale>
 
       <LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} />
-
-      {scans.length > 0 && (
-        <FadeInView index={0} style={{ marginTop: space[6] }}>
-          <SectionHeader title="Recent scans" action="See all" onAction={() => router.push('/history')} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[2] }}>
-            {scans.slice(0, 8).map((s) => (
-              <Card key={s.id} accessibilityLabel={`${s.name}${s.bestPrice ? `, best ${nzd(s.bestPrice)} at ${s.bestStore}` : ''}`}
-                onPress={() => (s.productId ? open(s.productId) : router.push({ pathname: '/barcode/[code]', params: { code: s.barcode } }))}
-                style={{ width: 196, padding: space[3], gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: c.brandSubtle, alignItems: 'center', justifyContent: 'center' }}>
-                    <ScanBarcode size={20} color={c.brandText} />
-                  </View>
-                  <Text style={[type.caption, { color: c.inkTertiary }]}>{timeAgo(s.scannedAt)}</Text>
-                </View>
-                <Text style={[type.bodyStrong, { color: c.ink, minHeight: 40 }]} numberOfLines={2}>{s.name}</Text>
-                {s.bestPrice != null ? (
-                  <Text style={[type.body, { color: c.inkSecondary }]} numberOfLines={2}>
-                    Best <Text style={{ fontFamily: 'Inter_700Bold', color: c.ink }}>{nzd(s.bestPrice)}</Text> at {s.bestStore}
-                  </Text>
-                ) : <Text style={[type.body, { color: c.inkSecondary }]}>No prices yet</Text>}
-                {s.verdict && <VerdictPill label={s.verdict} tone={s.verdict.startsWith('Lowest') ? 'good' : s.verdict.startsWith('Higher') ? 'high' : 'normal'} />}
-              </Card>
-            ))}
-          </ScrollView>
-        </FadeInView>
-      )}
 
       {featured && (
         <FadeInView index={1} style={{ marginTop: space[6] }}>
@@ -143,9 +130,9 @@ export default function Home() {
               ))}
             </ScrollView>
           ) : (
-            <InfoNote icon={PackageSearch} title="Store prices are still being connected"
-              body={`${total ? `${total.toLocaleString('en-NZ')} NZ products are searchable, ` : ''}but few have verified store prices yet. Seen a price in store? Share it and it appears here once checked.`}
-              action="Share a price" onAction={() => router.push('/report')} />
+            <InfoNote icon={PackageSearch} title="Compare supermarket prices"
+              body={`Search any product to see the latest prices seen at Woolworths, PAK'nSAVE, New World, FreshChoice, SuperValue, The Warehouse, chemists and pet stores.${total ? ` ${total.toLocaleString('en-NZ')} NZ products have photos and details.` : ''}`}
+              action="Search products" onAction={() => router.push('/search')} />
           )}
         </FadeInView>
       )}

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ImageIcon, SearchX } from 'lucide-react-native';
+import { Barcode, ChevronRight, ImageIcon, SearchX } from 'lucide-react-native';
 import React from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { applyFilters, FadeInView, FilterBar, FilterSheet, type Filters, SearchBar, type SortKey, useTheme } from '@/design/components';
@@ -12,6 +12,9 @@ import { Image } from 'expo-image';
 import { useApp } from '@/state/app-state';
 import { Card, EmptyState, LiveDataNotice, Screen, TopBar, VerdictPill } from '@/ui/kit';
 import { ListeningSheet, MicButton, useVoice } from '@/ui/voice';
+import { RetailCard } from '@/ui/retail';
+import { RetailError, searchRetail, type RetailResult } from '@/data/retail';
+import { ActivityIndicator } from 'react-native';
 
 export default function Search() {
   const params = useLocalSearchParams<{ q?: string; category?: string; sort?: SortKey; voice?: string }>();
@@ -31,6 +34,21 @@ export default function Search() {
     const t = setTimeout(() => searchAllProducts(q).then((r) => { if (alive) setMore(r); }), 300);
     return () => { alive = false; clearTimeout(t); };
   }, [q]);
+  // Supermarket, pharmacy and pet-store prices (observed, via our server).
+  const [retail, setRetail] = React.useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; data?: RetailResult; error?: string }>({ state: 'idle' });
+  const [retailTry, setRetailTry] = React.useState(0);
+  React.useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2 || /^\d{8,14}$/.test(term)) { setRetail({ state: 'idle' }); return; }
+    const ctl = new AbortController();
+    setRetail((r) => ({ state: 'loading', data: r.data }));
+    const t = setTimeout(() => {
+      searchRetail(term, location, ctl.signal)
+        .then((data) => setRetail({ state: 'ready', data }))
+        .catch((e) => { if ((e as Error).name !== 'AbortError') setRetail({ state: 'error', error: e instanceof RetailError ? e.message : 'Store prices can’t be reached right now.' }); });
+    }, 450);
+    return () => { ctl.abort(); clearTimeout(t); };
+  }, [q, location, retailTry]);
   const hints = React.useMemo(() => base.map((l) => l.product.name), [base]);
   const voice = useVoice((t) => setQ(t), hints);
   React.useEffect(() => { if (params.voice) voice.start(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -41,7 +59,7 @@ export default function Search() {
       <TopBar title={title} />
       <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-          <View style={{ flex: 1 }}><SearchBar value={q} onChangeText={setQ} placeholder="Search milk, nappies, TVs…" /></View>
+          <View style={{ flex: 1 }}><SearchBar value={q} onChangeText={setQ} placeholder="Product name or barcode number" /></View>
           <MicButton size={48} listening={voice.listening} onPress={voice.listening ? voice.stop : voice.start} />
         </View>
       </View>
@@ -55,15 +73,55 @@ export default function Search() {
         keyboardShouldPersistTaps="handled"
         refreshing={refreshing}
         onRefresh={async () => { setRefreshing(true); await refreshCatalog(); setRefreshing(false); }}
-        ListHeaderComponent={catalogStatus === 'live' ? null : <View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} /></View>}
-        ListFooterComponent={more.length ? (
-          <View style={{ gap: space[2], marginTop: space[4] }}>
-            <Text style={[type.h2, { color: c.ink }]}>{results.length ? 'More NZ products' : 'NZ products'}</Text>
-            <Text style={[type.body, { color: c.inkSecondary, marginBottom: space[1] }]}>No verified store prices yet. Tap one to see it or share a price you've seen.</Text>
-            {more.map((p) => <MoreRow key={p.id} p={p} />)}
+        ListHeaderComponent={
+          <>
+            {catalogStatus !== 'live' && <View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} /></View>}
+            {/^\d{8,14}$/.test(q.trim()) && (
+              <Card onPress={() => router.push({ pathname: '/barcode/[code]', params: { code: q.trim() } })} accessibilityLabel={`Look up barcode ${q.trim()}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }}>
+                <Barcode size={24} color={c.brandText} />
+                <Text style={[type.bodyStrong, { color: c.ink, flex: 1 }]}>Look up barcode {q.trim()}</Text>
+                <ChevronRight size={18} color={c.inkTertiary} />
+              </Card>
+            )}
+          </>
+        }
+        ListFooterComponent={
+          <View style={{ gap: space[3] }}>
+            {retail.state !== 'idle' && (
+              <View style={{ gap: space[2], marginTop: results.length ? space[4] : 0 }}>
+                <Text style={[type.h2, { color: c.ink }]}>Supermarket, pharmacy and pet store prices</Text>
+                {retail.state === 'loading' && <ActivityIndicator color={c.brand} style={{ marginVertical: space[4] }} />}
+                {retail.state === 'error' && (
+                  <Card style={{ padding: space[4], gap: space[2] }}>
+                    <Text style={[type.bodyStrong, { color: c.ink }]}>Price unavailable</Text>
+                    <Text style={[type.body, { color: c.inkSecondary }]}>{retail.error} We don't show prices we can't check.</Text>
+                    <Text onPress={() => setRetailTry((n) => n + 1)} style={[type.bodyStrong, { color: c.brandText }]}>Try again</Text>
+                  </Card>
+                )}
+                {retail.state === 'ready' && retail.data && (
+                  <>
+                    {retail.data.products.length === 0
+                      ? <Text style={[type.body, { color: c.inkSecondary }]}>No observed prices for “{q.trim()}” at {retail.data.chainsSearched.length} NZ chains. Try a brand or a simpler name.</Text>
+                      : retail.data.products.map((p, i) => <RetailCard key={`${p.name}-${p.size}-${i}`} p={p} />)}
+                    <Text style={[type.caption, { color: c.inkTertiary }]}>
+                      Prices from Baskt (baskt.nz): the latest prices seen at {retail.data.chainsSearched.join(', ')}. These are not live checkout prices and may have changed; check with the store. Woolworths prices are its online delivery-zone prices.
+                      {retail.data.chainsFailed.length ? ` Couldn't reach: ${retail.data.chainsFailed.join(', ')}.` : ''}
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+            {more.length > 0 && (
+              <View style={{ gap: space[2], marginTop: space[4] }}>
+                <Text style={[type.h2, { color: c.ink }]}>More NZ products</Text>
+                <Text style={[type.body, { color: c.inkSecondary, marginBottom: space[1] }]}>Product details only. Tap one to see it or share a price you've seen.</Text>
+                {more.map((p) => <MoreRow key={p.id} p={p} />)}
+              </View>
+            )}
           </View>
-        ) : null}
-        ListEmptyComponent={more.length ? null : <EmptyState icon={SearchX} title="No matches" body={q ? `Nothing found for “${q}”. Try fewer words or clear some filters.` : 'Try clearing some filters.'} action="Clear filters" onAction={() => setFilters({ sort: 'relevance' })} />}
+        }
+        ListEmptyComponent={more.length || retail.state !== 'idle' ? null : <EmptyState icon={SearchX} title="No matches" body={q ? `Nothing found for “${q}”. Try fewer words or clear some filters.` : 'Try clearing some filters.'} action="Clear filters" onAction={() => setFilters({ sort: 'relevance' })} />}
         renderItem={({ item, index }) => <FadeInView index={Math.min(index, 8)}><ResultRow l={item} /></FadeInView>}
       />
       <ListeningSheet visible={voice.listening || !!voice.error} partial={voice.partial} error={voice.error}
@@ -95,8 +153,8 @@ function ResultRow({ l }: { l: Listing }) {
   return (
     <Card onPress={() => router.push({ pathname: '/product/[id]', params: { id: l.id } })} accessibilityLabel={`${l.product.name}, best ${nzd(l.price)} at ${l.best.store.name}`}
       style={{ flexDirection: 'row', gap: space[3], padding: space[3], alignItems: 'center' }}>
-      <View style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
-        <ImageIcon size={24} color={c.inkTertiary} />
+      <View style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {l.product.imageUrl ? <Image source={{ uri: l.product.imageUrl }} style={{ width: '100%', height: '100%' }} contentFit="contain" /> : <ImageIcon size={24} color={c.inkTertiary} />}
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{l.product.name}{l.product.size ? ` ${l.product.size}` : ''}</Text>
