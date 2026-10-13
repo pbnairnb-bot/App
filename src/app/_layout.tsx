@@ -46,6 +46,7 @@ function Shell() {
         <Stack.Screen name="match/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
         <Stack.Screen name="report" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="assistant" options={{ animation: 'slide_from_bottom' }} />
       </Stack>}
       {splashDone && auth.locked && <LockScreen />}
       {!splashDone && <AnimatedSplash ready={ready && catalog && auth.ready} onFinish={() => setSplashDone(true)} />}

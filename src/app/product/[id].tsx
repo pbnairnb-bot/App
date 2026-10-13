@@ -10,6 +10,7 @@ import { bestOffer, formatKm, freshness, nzd, type Offer, policiesForCategory, u
 import { getHistory, getOffers, getProduct, policies as allPolicies } from '@/data/repo';
 import type { Product } from '@/data/types';
 import { useApp } from '@/state/app-state';
+import { CompareStrip } from '@/ui/compare';
 import { Card, EmptyState, IconButton, Screen, SectionHeader, Sparkline, StoreMark, TopBar, VerdictPill } from '@/ui/kit';
 
 export default function ProductScreen() {
@@ -54,6 +55,13 @@ export default function ProductScreen() {
         </View>
         <Text accessibilityRole="header" style={[type.h1, { color: c.ink }]}>{title}</Text>
       </FadeInView>
+
+      {offers.length > 1 && (
+        <FadeInView index={1} style={{ marginTop: space[4] }}>
+          <Text style={[type.bodyStrong, { color: c.inkSecondary, marginHorizontal: space[4], marginBottom: space[2] }]}>Compare {offers.length} stores</Text>
+          <CompareStrip product={product} offers={offers} />
+        </FadeInView>
+      )}
 
       {best ? (
         <FadeInView index={1} style={{ marginHorizontal: space[4], marginTop: space[4] }}>

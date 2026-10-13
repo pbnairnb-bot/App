@@ -9,9 +9,10 @@ import { formatKm, nzd, unitPrice } from '@/data/compare';
 import { search, type Listing } from '@/data/repo';
 import { useApp } from '@/state/app-state';
 import { Card, EmptyState, SampleBanner, Screen, TopBar, VerdictPill } from '@/ui/kit';
+import { ListeningSheet, MicButton, useVoice } from '@/ui/voice';
 
 export default function Search() {
-  const params = useLocalSearchParams<{ q?: string; category?: string; sort?: SortKey }>();
+  const params = useLocalSearchParams<{ q?: string; category?: string; sort?: SortKey; voice?: string }>();
   const c = useTheme();
   const { location } = useApp();
   const [q, setQ] = React.useState(params.q ?? '');
@@ -19,13 +20,19 @@ export default function Search() {
   const [sheet, setSheet] = React.useState(false);
   const base = React.useMemo(() => search(q, location), [q, location]);
   const results = React.useMemo(() => applyFilters(base, filters, location), [base, filters, location]);
+  const hints = React.useMemo(() => base.map((l) => l.product.name), [base]);
+  const voice = useVoice((t) => setQ(t), hints);
+  React.useEffect(() => { if (params.voice) voice.start(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   const title = params.category ? CATEGORY_LABELS[params.category] ?? 'Search' : 'Search';
 
   return (
     <Screen scroll={false}>
       <TopBar title={title} />
       <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
-        <SearchBar value={q} onChangeText={setQ} placeholder="Search milk, nappies, TVs…" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          <View style={{ flex: 1 }}><SearchBar value={q} onChangeText={setQ} placeholder="Search milk, nappies, TVs…" /></View>
+          <MicButton size={48} listening={voice.listening} onPress={voice.listening ? voice.stop : voice.start} />
+        </View>
       </View>
       <View style={{ marginTop: space[3] }}>
         <FilterBar filters={filters} onChange={setFilters} onOpenAll={() => setSheet(true)} location={location} onNeedLocation={() => router.push('/location')} resultCount={results.length} />
@@ -39,6 +46,8 @@ export default function Search() {
         ListEmptyComponent={<EmptyState icon={SearchX} title="No matches" body={q ? `Nothing found for “${q}”. Try fewer words or clear some filters.` : 'Try clearing some filters.'} action="Clear filters" onAction={() => setFilters({ sort: 'relevance' })} />}
         renderItem={({ item, index }) => <FadeInView index={Math.min(index, 8)}><ResultRow l={item} /></FadeInView>}
       />
+      <ListeningSheet visible={voice.listening || !!voice.error} partial={voice.partial} error={voice.error}
+        onStop={() => { voice.stop(); voice.clearError(); }} onRetry={voice.start} />
       <FilterSheet visible={sheet} items={base} filters={filters} onApply={(f) => { setFilters(f); setSheet(false); }} onClose={() => setSheet(false)} location={location} categoryLabels={CATEGORY_LABELS} />
     </Screen>
   );

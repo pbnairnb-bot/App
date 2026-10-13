@@ -47,9 +47,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PriceMatch NZ uses your camera to scan product barcodes. Photos are never saved.",
-          "microphonePermission": false,
-          "recordAudioAndroid": false
+          "cameraPermission": "PriceMatch NZ uses your camera to scan product barcodes. Photos are never saved."
         }
       ],
       [
@@ -66,7 +64,17 @@
       ],
       "expo-secure-store",
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "PriceMatch NZ uses the microphone only while you search by voice.",
+          "speechRecognitionPermission": "PriceMatch NZ turns your voice into a search. We don't record your voice.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
