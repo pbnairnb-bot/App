@@ -14,10 +14,10 @@ import { timeAgo, toCard } from '@/ui/format';
 
 export default function Home() {
   const c = useTheme();
-  const { location, scans, favourites, toggleFavourite, readAlerts } = useApp();
+  const { location, scans, favourites, toggleFavourite, readAlerts, catalogVersion, refreshCatalog } = useApp();
   const unread = getAlerts().filter((a) => !a.read && !readAlerts.includes(a.id)).length;
-  const todays = React.useMemo(() => deals(location), [location]);
-  const near = React.useMemo(() => applyFilters(listings(location), { sort: location ? 'nearest' : 'relevance' }, location).slice(0, 6), [location]);
+  const todays = React.useMemo(() => deals(location), [location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  const near = React.useMemo(() => applyFilters(listings(location), { sort: location ? 'nearest' : 'relevance' }, location).slice(0, 6), [location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const open = (id: string) => router.push({ pathname: '/product/[id]', params: { id } });
   // "Compare at a glance": the deal with the most stores to compare.
   const featured = React.useMemo(() => {
@@ -28,7 +28,7 @@ export default function Home() {
   }, [todays, near, location]);
 
   return (
-    <Screen bottomSpace={TAB_BAR_SPACE}>
+    <Screen bottomSpace={TAB_BAR_SPACE} onRefresh={refreshCatalog}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[4], paddingTop: space[3] }}>
         <Logo height={28} />
         <View style={{ flex: 1 }} />

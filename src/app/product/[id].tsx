@@ -17,9 +17,9 @@ export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = useTheme();
   const { width } = useWindowDimensions();
-  const { location, favourites, toggleFavourite } = useApp();
+  const { location, favourites, toggleFavourite, catalogVersion } = useApp();
   const product = getProduct(id);
-  const offers = React.useMemo(() => (product ? getOffers(product.id, location) : []), [product, location]);
+  const offers = React.useMemo(() => (product ? getOffers(product.id, location) : []), [product, location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const history = React.useMemo(() => (product ? getHistory(product.id) : []), [product]);
 
   if (!product) {

@@ -16,11 +16,12 @@ import { ListeningSheet, MicButton, useVoice } from '@/ui/voice';
 export default function Search() {
   const params = useLocalSearchParams<{ q?: string; category?: string; sort?: SortKey; voice?: string }>();
   const c = useTheme();
-  const { location } = useApp();
+  const { location, catalogVersion, refreshCatalog } = useApp();
+  const [refreshing, setRefreshing] = React.useState(false);
   const [q, setQ] = React.useState(params.q ?? '');
   const [filters, setFilters] = React.useState<Filters>({ sort: params.sort ?? 'relevance', categories: params.category ? [params.category] : undefined });
   const [sheet, setSheet] = React.useState(false);
-  const base = React.useMemo(() => search(q, location), [q, location]);
+  const base = React.useMemo(() => search(q, location), [q, location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const results = React.useMemo(() => applyFilters(base, filters, location), [base, filters, location]);
   // Every other NZ product matching the words, even without prices yet.
   const [more, setMore] = React.useState<Product[]>([]);
@@ -52,6 +53,8 @@ export default function Search() {
         keyExtractor={(l) => l.id}
         contentContainerStyle={{ padding: space[4], gap: space[3], paddingBottom: 48 }}
         keyboardShouldPersistTaps="handled"
+        refreshing={refreshing}
+        onRefresh={async () => { setRefreshing(true); await refreshCatalog(); setRefreshing(false); }}
         ListHeaderComponent={<View style={{ marginHorizontal: -space[4], marginTop: -space[3] }}><SampleBanner /></View>}
         ListFooterComponent={more.length ? (
           <View style={{ gap: space[2], marginTop: space[4] }}>

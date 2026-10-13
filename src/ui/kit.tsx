@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, type LucideIcon } from 'lucide-react-native';
 import React from 'react';
-import { Animated, Modal, Pressable, ScrollView, type StyleProp, Text, useColorScheme, View, type ViewStyle } from 'react-native';
+import { Animated, Modal, Pressable, RefreshControl, ScrollView, type StyleProp, Text, useColorScheme, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Button, DealBadge, duration, easing, PressableScale, useReducedMotion, useTheme } from '@/design/components';
@@ -16,12 +16,15 @@ export const shadow = { shadowColor: '#1a1433', shadowOpacity: 0.08, shadowRadiu
 /** Space the floating tab bar needs at the bottom of tab screens. */
 export const TAB_BAR_SPACE = 104;
 
-export function Screen({ children, scroll = true, bottomSpace = 24, style }: { children: React.ReactNode; scroll?: boolean; bottomSpace?: number; style?: StyleProp<ViewStyle> }) {
+export function Screen({ children, scroll = true, bottomSpace = 24, style, onRefresh }: { children: React.ReactNode; scroll?: boolean; bottomSpace?: number; style?: StyleProp<ViewStyle>; onRefresh?: () => Promise<void> }) {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const pad = { paddingTop: insets.top, paddingBottom: insets.bottom + bottomSpace };
+  const [refreshing, setRefreshing] = React.useState(false);
+  const refresh = onRefresh ? <RefreshControl refreshing={refreshing} tintColor={c.brand} colors={[c.brand]} progressViewOffset={insets.top}
+    onRefresh={async () => { setRefreshing(true); try { await onRefresh(); } finally { setRefreshing(false); } }} /> : undefined;
   return scroll ? (
-    <ScrollView style={{ flex: 1, backgroundColor: c.canvas }} contentContainerStyle={[pad, style]} keyboardShouldPersistTaps="handled">{children}</ScrollView>
+    <ScrollView style={{ flex: 1, backgroundColor: c.canvas }} contentContainerStyle={[pad, style]} keyboardShouldPersistTaps="handled" refreshControl={refresh}>{children}</ScrollView>
   ) : (
     <View style={[{ flex: 1, backgroundColor: c.canvas }, { paddingTop: insets.top }, style]}>{children}</View>
   );

@@ -11,11 +11,11 @@ import { EmptyState, Screen, TAB_BAR_SPACE } from '@/ui/kit';
 
 export default function Favourites() {
   const c = useTheme();
-  const { favourites, toggleFavourite, location } = useApp();
+  const { favourites, toggleFavourite, location, catalogVersion } = useApp();
   const items = React.useMemo(() => {
     const all = listings(location);
     return favourites.map((id) => all.find((l) => l.id === id)).filter((l): l is NonNullable<typeof l> => !!l);
-  }, [favourites, location]);
+  }, [favourites, location, catalogVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Screen bottomSpace={TAB_BAR_SPACE}>

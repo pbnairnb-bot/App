@@ -8,6 +8,7 @@ import React from 'react';
 import type { ShopperLocation } from '@/design/components';
 import type { ScanRecord } from '@/data/types';
 import { supabase } from '@/lib/supabase';
+import { loadCatalog } from '@/data/repo';
 import { useAuth } from './auth';
 
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => { const r = (Math.random() * 16) | 0; return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16); });
@@ -54,6 +55,10 @@ interface AppState extends Persisted {
   removeScan: (id: string) => ScanRecord | undefined;
   restoreScan: (s: ScanRecord) => void;
   clearScans: () => void;
+  /** Goes up whenever live prices change, so screens redraw. */
+  catalogVersion: number;
+  /** Reload prices now (pull to refresh). */
+  refreshCatalog: () => Promise<void>;
 }
 
 const Ctx = React.createContext<AppState | null>(null);
@@ -98,6 +103,20 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, ready]);
 
+  // Live prices: when any price changes in Supabase, reload the catalogue and redraw.
+  const [catalogVersion, setCatalogVersion] = React.useState(0);
+  const refreshCatalog = React.useCallback(async () => { if (await loadCatalog()) setCatalogVersion((v) => v + 1); }, []);
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase.channel('live-prices')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prices' }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { refreshCatalog(); }, 1500);
+      })
+      .subscribe();
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+  }, [refreshCatalog]);
+
   const update = React.useCallback((patch: Partial<Persisted>) => {
     setState((prev) => {
       const next = { ...prev, ...patch };
@@ -110,6 +129,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     ...state,
     ready,
     update,
+    catalogVersion,
+    refreshCatalog,
     toggleFavourite: (id) => {
       const f = stateRef.current.favourites;
       const on = !f.includes(id);
