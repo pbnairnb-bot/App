@@ -1,4 +1,5 @@
-import { ExternalLink } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ExternalLink, MapPinned } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
 import { CategoryChip, FadeInView, Notice, PriceMatchList, useTheme } from '@/design/components';
@@ -7,7 +8,7 @@ import { CATEGORY_LABELS } from '@/data/categories';
 import { policies } from '@/data/repo';
 import { observedAgo } from '@/data/retail';
 import { retailers, type Retailer } from '@/data/store';
-import { Card, Screen, SectionHeader, TopBar } from '@/ui/kit';
+import { Card, IconButton, Screen, SectionHeader, TopBar } from '@/ui/kit';
 
 const STATUS = {
   connected: { label: 'Prices connected', tone: 'deal' },
@@ -28,7 +29,7 @@ export default function Stores() {
 
   return (
     <Screen>
-      <TopBar title="NZ stores" />
+      <TopBar title="NZ stores" right={<IconButton icon={MapPinned} label="Map of stores near you" onPress={() => router.push('/map')} />} />
       <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
         <Text style={[type.body, { color: c.inkSecondary }]}>
           Every store we know of, its official website, and whether PriceMatch NZ can show its prices. We only use data a store or source allows; for the rest, tap the website to check prices there.

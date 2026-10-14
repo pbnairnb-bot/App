@@ -1,6 +1,7 @@
 // Imports real New Zealand map data from OpenStreetMap through the Overpass API.
 //   ?kind=stations (default): every fuel station — name, brand, location, address, fuels sold where mapped. NO prices.
 //   ?kind=places: suburbs, towns and cities, so shoppers can choose their area by name.
+//   ?kind=shops: supermarkets, chemists, pet, department, hardware and electronics stores for the store map.
 // Data © OpenStreetMap contributors, licensed under the ODbL (attribution shown in the app).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -11,9 +12,22 @@ const TILES: [number, number, number, number][] = [
   [-36.0, 172.5, -34.3, 174.95], [-37.4, 174.0, -36.0, 175.6], [-39.0, 174.4, -37.4, 178.6], [-41.7, 173.9, -39.0, 178.6],
   [-43.0, 170.8, -40.4, 174.5], [-44.8, 168.0, -43.0, 173.4], [-47.4, 166.3, -44.8, 171.6], [-44.5, -177.0, -43.5, -176.0],
 ];
-const tileQuery = (kind: string, [s, w, n, e]: number[]) => kind === "stations"
-  ? `[out:json][timeout:90];(node[amenity=fuel](${s},${w},${n},${e});way[amenity=fuel](${s},${w},${n},${e}););out center tags;`
-  : `[out:json][timeout:90];node[place~"^(city|town|suburb|village|quarter)$"][name](${s},${w},${n},${e});out tags;`;
+const SHOP_RE = "^(supermarket|chemist|pet|department_store|doityourself|hardware|electronics|variety_store)$";
+const tileQuery = (kind: string, [s, w, n, e]: number[]) => {
+  const b = `(${s},${w},${n},${e})`;
+  if (kind === "stations") return `[out:json][timeout:90];(node[amenity=fuel]${b};way[amenity=fuel]${b};);out center tags;`;
+  if (kind === "shops") return `[out:json][timeout:90];(node[shop~"${SHOP_RE}"][name]${b};way[shop~"${SHOP_RE}"][name]${b};node[amenity=pharmacy][name]${b};way[amenity=pharmacy][name]${b};);out center tags;`;
+  return `[out:json][timeout:90];node[place~"^(city|town|suburb|village|quarter)$"][name]${b};out tags;`;
+};
+const SHOP_KIND: Record<string, string> = { supermarket: "supermarket", chemist: "chemist", pet: "pet", department_store: "department", variety_store: "department", doityourself: "hardware", hardware: "hardware", electronics: "electronics" };
+// Brand names as mapped in OpenStreetMap -> our retailer directory ids.
+const RETAILER: [RegExp, string][] = [
+  [/woolworths|countdown/i, "woolworths"], [/pak.?n.?save/i, "paknsave"], [/new world/i, "newworld"], [/fresh ?choice/i, "freshchoice"],
+  [/super ?value/i, "supervalue"], [/farro/i, "farro"], [/four square/i, "foursquare"], [/the warehouse/i, "thewarehouse"], [/kmart/i, "kmart"],
+  [/chemist warehouse/i, "chemistwarehouse"], [/bargain chemist/i, "bargainchemist"], [/life ?pharmacy/i, "lifepharmacy"], [/unichem/i, "unichem"],
+  [/animates/i, "animates"], [/petstock/i, "petstock"], [/bunnings/i, "bunnings"], [/mitre ?10/i, "mitre10"], [/noel leeming/i, "noelleeming"],
+  [/jb hi-?fi/i, "jbhifi"], [/harvey norman/i, "harveynorman"], [/pb ?tech/i, "pbtech"], [/farmers/i, "farmers"], [/briscoes/i, "briscoes"], [/costco/i, "costco"],
+];
 const SERVERS = [
   "https://overpass.private.coffee/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -45,7 +59,7 @@ Deno.serve(async (req: Request) => {
   const { data: settings } = await db.rpc("import_settings");
   if (!settings || req.headers.get("x-import-key") !== settings.key) return json({ error: "unauthorised" }, 401);
   const params = new URL(req.url).searchParams;
-  const kind = params.get("kind") === "places" ? "places" : "stations";
+  const k = params.get("kind"); const kind = k === "places" || k === "shops" ? k : "stations";
   // One region per call (?tile=0..7) keeps each request well inside the edge runtime's time limit.
   const tileIdx = Number(params.get("tile") ?? "-1");
   if (!(tileIdx >= 0 && tileIdx < TILES.length)) return json({ error: "pass ?tile=0..7", tiles: TILES.length }, 400);
@@ -85,13 +99,25 @@ Deno.serve(async (req: Request) => {
         source: "OpenStreetMap contributors (ODbL)", source_ref: `https://www.openstreetmap.org/${e.type}/${e.id}`, updated_at: now,
       };
     }).filter(Boolean);
+  } else if (kind === "shops") {
+    rows = elements.map((e) => {
+      const t = e.tags ?? {}; const lat = e.lat ?? e.center?.lat; const lng = e.lon ?? e.center?.lon;
+      if (lat == null || lng == null || !t.name) return null;
+      const label = `${t.brand ?? ""} ${t.name}`;
+      return {
+        id: `osm-${e.type}-${e.id}`, name: t.name, brand: t.brand ?? null, kind: t.amenity === "pharmacy" ? "chemist" : SHOP_KIND[t.shop] ?? "other",
+        retailer_id: RETAILER.find(([re]) => re.test(label))?.[1] ?? null, lat, lng,
+        address: [[t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" "), t["addr:suburb"], t["addr:city"]].filter(Boolean).join(", ") || null,
+        opening_hours: t.opening_hours ?? null, source: "OpenStreetMap contributors (ODbL)", source_ref: `https://www.openstreetmap.org/${e.type}/${e.id}`, updated_at: now,
+      };
+    }).filter(Boolean);
   } else {
     rows = elements.filter((e) => e.tags?.name && e.lat != null).map((e) => ({
       id: `osm-node-${e.id}`, name: e.tags.name, kind: e.tags.place, lat: e.lat, lng: e.lon,
       region: e.tags["is_in:region"] ?? e.tags["is_in"] ?? null, population: Number(e.tags.population) || null, updated_at: now,
     }));
   }
-  const table = kind === "stations" ? "fuel_stations" : "places";
+  const table = kind === "stations" ? "fuel_stations" : kind === "shops" ? "store_locations" : "places";
   let saved = 0; const upErr: string[] = [];
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await db.from(table).upsert(rows.slice(i, i + 500), { onConflict: "id" });

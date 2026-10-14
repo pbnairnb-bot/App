@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { BellPlus, Fuel as FuelIcon, MapPin, Navigation, Trash2 } from 'lucide-react-native';
+import { BellPlus, Fuel as FuelIcon, MapPin, MapPinned, Navigation, Trash2 } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { Button, CategoryChip, FadeInView, LocationPill, Notice, useTheme } from '@/design/components';
@@ -11,7 +11,7 @@ import type { FuelAlertRule, FuelType } from '@/data/types';
 import { useApp } from '@/state/app-state';
 import { useAuth } from '@/state/auth';
 import { timeAgo } from '@/ui/format';
-import { Card, SectionHeader, Screen, TopBar } from '@/ui/kit';
+import { Card, IconButton, SectionHeader, Screen, TopBar } from '@/ui/kit';
 
 const FUELS: FuelType[] = ['91', '95', '98', 'diesel'];
 const dollars = (cents: number) => `$${(cents / 100).toFixed(3)}`;
@@ -37,7 +37,7 @@ export default function FuelScreen() {
 
   return (
     <Screen onRefresh={() => load(true)}>
-      <TopBar />
+      <TopBar right={<IconButton icon={MapPinned} label="Map of stations" onPress={() => router.push('/map')} />} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[4], paddingTop: space[3] }}>
         <Text accessibilityRole="header" style={[type.h1, { color: c.ink, flex: 1 }]}>Fuel & Travel</Text>
         <LocationPill label={location ? location.label.split(',')[0] : 'Set your area'} onPress={() => router.push('/location')} />

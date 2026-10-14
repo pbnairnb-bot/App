@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, ChevronRight, Mic, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
+import { Bell, ChevronRight, MapPinned, Mic, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
 import React from 'react';
 import { FlatList, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { FadeInView, LocationPill, PressableScale, useTheme } from '@/design/components';
@@ -46,17 +46,17 @@ export default function Home() {
         <Logo height={28} />
         <View style={{ flex: 1 }} />
         <LocationPill label={location ? location.label.split(',')[0] : 'Set area'} onPress={() => router.push('/location')} />
+        <IconButton icon={Sparkles} label="Ask the shopping assistant" onPress={() => router.push('/assistant')} />
         <IconButton icon={Bell} label="Alerts" badge={unread} onPress={() => router.push('/alerts')} />
       </View>
-      <View style={{ flexDirection: 'row', gap: space[2], marginHorizontal: space[4], marginTop: space[3] }}>
+      <View style={{ marginHorizontal: space[4], marginTop: space[3] }}>
         <PressableScale accessibilityRole="search" accessibilityLabel="Search products" onPress={() => router.push('/search')}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 48, paddingLeft: space[4], paddingRight: space[1],
+          style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 52, paddingLeft: space[4], paddingRight: space[1],
             borderRadius: radius.full, backgroundColor: c.surface, borderWidth: 1, borderColor: c.borderStrong }}>
           <Search size={size.iconSm} color={c.inkTertiary} />
-          <Text style={[type.bodyLg, { color: c.inkTertiary, flex: 1 }]} numberOfLines={1}>Search products</Text>
+          <Text style={[type.bodyLg, { color: c.inkTertiary, flex: 1 }]} numberOfLines={1}>Search milk, Panadol, dog food…</Text>
           <IconButton icon={Mic} label="Search by voice" flat color={c.brandText} onPress={() => router.push({ pathname: '/search', params: { voice: '1' } })} />
         </PressableScale>
-        <IconButton icon={Sparkles} label="Ask the shopping assistant" onPress={() => router.push('/assistant')} />
       </View>
       <LiveDataNotice status={catalogStatus} onRetry={refreshCatalog} />
 
@@ -91,6 +91,20 @@ export default function Home() {
               onPress={() => (cat.id === 'fuel-travel' ? router.push('/fuel') : router.push({ pathname: '/category/[id]', params: { id: cat.id } }))} />
           ))}
         </View>
+      </FadeInView>
+
+      <FadeInView index={1} style={{ marginTop: space[4], marginHorizontal: space[4] }}>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Map of stores near you" onPress={() => router.push('/map')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.lg, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+          <View style={{ width: 44, height: 44, borderRadius: radius.md, backgroundColor: c.brandSubtle, alignItems: 'center', justifyContent: 'center' }}>
+            <MapPinned size={24} color={c.brandText} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[type.bodyStrong, { color: c.ink }]}>Stores near you</Text>
+            <Text style={[type.caption, { color: c.inkSecondary }]}>Supermarkets, chemists, pet stores and fuel on a map</Text>
+          </View>
+          <ChevronRight size={20} color={c.inkTertiary} />
+        </PressableScale>
       </FadeInView>
 
       {/* D. Popular products and price comparisons */}
