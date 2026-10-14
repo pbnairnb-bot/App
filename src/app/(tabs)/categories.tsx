@@ -1,45 +1,32 @@
 import { router } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
 import React from 'react';
-import { Text, View } from 'react-native';
-import { FadeInView, useTheme } from '@/design/components';
-import { radius, space, type } from '@/design/theme';
+import { Text, useWindowDimensions, View } from 'react-native';
+import { useTheme } from '@/design/components';
+import { space, type } from '@/design/theme';
 import { CATEGORY_LIST } from '@/data/categories';
-import { listings } from '@/data/repo';
-import { Card, Screen, TAB_BAR_SPACE } from '@/ui/kit';
+import { categoryCounts } from '@/data/store';
+import { Screen, TAB_BAR_SPACE } from '@/ui/kit';
+import { CategoryTile } from '@/ui/store-cards';
 
 export default function Categories() {
   const c = useTheme();
-  const counts = React.useMemo(() => {
-    const m: Record<string, number> = {};
-    listings().forEach((l) => { m[l.category!] = (m[l.category!] ?? 0) + 1; });
-    return m;
-  }, []);
+  const { width } = useWindowDimensions();
+  const [counts, setCounts] = React.useState<Record<string, number> | null>(null);
+  React.useEffect(() => { categoryCounts().then(setCounts).catch(() => setCounts(null)); }, []);
+  const cols = width >= 600 ? 4 : 3;
+  const tileW = (Math.min(width, 720) - space[4] * 2 - space[3] * (cols - 1)) / cols;
   return (
     <Screen bottomSpace={TAB_BAR_SPACE}>
-      <Text accessibilityRole="header" style={[type.h1, { color: c.ink, paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[4] }]}>Categories</Text>
-      <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
-        {CATEGORY_LIST.map((cat, i) => {
-          const n = counts[cat.id] ?? 0;
-          return (
-            <FadeInView key={cat.id} index={i}>
-              <Card accessibilityLabel={cat.label} onPress={() => (cat.id === 'petrol' ? router.push('/') : router.push({ pathname: '/search', params: { category: cat.id } }))}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }}>
-                <View style={{ width: 52, height: 52, borderRadius: radius.md, backgroundColor: cat.id === 'petrol' ? c.dealSubtle : c.brandSubtle, alignItems: 'center', justifyContent: 'center' }}>
-                  <cat.icon size={26} color={cat.id === 'petrol' ? c.dealText : c.brandText} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.h3, { color: c.ink }]}>{cat.label}</Text>
-                  <Text style={[type.caption, { color: c.inkSecondary }]}>
-                    {cat.id === 'petrol' ? 'National averages from MBIE on Home' : n ? `${n} with verified prices` : 'No verified prices yet'}
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={c.inkTertiary} />
-              </Card>
-            </FadeInView>
-          );
-        })}
+      <Text accessibilityRole="header" style={[type.h1, { color: c.ink, padding: space[4] }]}>Categories</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3], paddingHorizontal: space[4] }}>
+        {CATEGORY_LIST.map((cat) => (
+          <CategoryTile key={cat.id} cat={cat} width={tileW} count={cat.id === 'fuel-travel' || !counts ? undefined : counts[cat.id] ?? 0}
+            onPress={() => (cat.id === 'fuel-travel' ? router.push('/fuel') : router.push({ pathname: '/category/[id]', params: { id: cat.id } }))} />
+        ))}
       </View>
+      <Text style={[type.caption, { color: c.inkSecondary, margin: space[4] }]}>
+        Product counts are items with saved, verified store prices. More appear as stores are connected.
+      </Text>
     </Screen>
   );
 }

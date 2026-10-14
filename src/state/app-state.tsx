@@ -17,6 +17,8 @@ import { useAuth } from './auth';
 
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => { const r = (Math.random() * 16) | 0; return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16); });
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/.test(s);
+/** Saved store-price items have ids like 'gtin:…' or 'k:…'. */
+const isStoreItem = (id: string) => id.includes(':');
 
 export interface AlertPrefs {
   enabled: boolean;
@@ -100,14 +102,17 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!userId || !ready) return;
     (async () => {
-      const [{ data: favs }, { data: scans }] = await Promise.all([
+      const [{ data: favs }, { data: scans }, { data: favItems }] = await Promise.all([
         supabase.from('favourites').select('product_id'),
         supabase.from('scan_history').select('*').order('scanned_at', { ascending: false }).limit(200),
+        supabase.from('favourite_items').select('item_id'),
       ]);
       const local = stateRef.current;
-      const remoteFavs = (favs ?? []).map((f) => f.product_id as string);
+      const remoteFavs = [...(favs ?? []).map((f) => f.product_id as string), ...(favItems ?? []).map((f) => f.item_id as string)];
       const pushFavs = local.favourites.filter((f) => !remoteFavs.includes(f) && !f.startsWith('off-'));
-      if (pushFavs.length) await supabase.from('favourites').upsert(pushFavs.map((product_id) => ({ user_id: userId, product_id })));
+      const pushItems = pushFavs.filter(isStoreItem), pushProducts = pushFavs.filter((f) => !isStoreItem(f));
+      if (pushProducts.length) await supabase.from('favourites').upsert(pushProducts.map((product_id) => ({ user_id: userId, product_id })));
+      if (pushItems.length) await supabase.from('favourite_items').upsert(pushItems.map((item_id) => ({ user_id: userId, item_id })));
       const remoteScans: ScanRecord[] = (scans ?? []).map(fromRow);
       // Scans made on this phone before signing in: add the ones the account doesn't have yet (one entry per barcode).
       const pushScans = local.scans.filter((sc) => !remoteScans.some((r) => r.barcode === sc.barcode));
@@ -225,7 +230,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const on = !f.includes(id);
       update({ favourites: on ? [id, ...f] : f.filter((x) => x !== id) });
       const u = uid.current;
-      if (u && !id.startsWith('off-')) {
+      if (u && isStoreItem(id)) {
+        (on ? supabase.from('favourite_items').upsert({ user_id: u, item_id: id }) : supabase.from('favourite_items').delete().eq('item_id', id)).then(() => {}, () => {});
+      } else if (u && !id.startsWith('off-')) {
         (on ? supabase.from('favourites').upsert({ user_id: u, product_id: id }) : supabase.from('favourites').delete().eq('product_id', id)).then(() => {}, () => {});
       }
     },

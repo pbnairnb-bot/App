@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
-import { Fuel, Heart, Home, LayoutGrid, User, type LucideIcon } from 'lucide-react-native';
+import { Heart, Home, LayoutGrid, ScanBarcode, User, type LucideIcon } from 'lucide-react-native';
 import React from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,8 +20,6 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const routes = state.routes.filter((r) => TABS[r.name]);
-  const fuelRoute = state.routes.find((r) => r.name === 'fuel');
-  const fuelFocused = !!fuelRoute && state.routes[state.index]?.key === fuelRoute.key;
   const left = routes.slice(0, 2), right = routes.slice(2);
 
   const tab = (r: (typeof routes)[number]) => {
@@ -47,13 +45,13 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
         {left.map(tab)}
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <PressableScale accessibilityRole="tab" accessibilityLabel="Fuel prices" accessibilityState={{ selected: fuelFocused }} scaleTo={0.92}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); if (fuelRoute && !fuelFocused) navigation.navigate('fuel'); }}
+          <PressableScale accessibilityRole="button" accessibilityLabel="Scan a barcode" accessibilityHint="Opens the camera to scan a product barcode" scaleTo={0.92}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push('/scan'); }}
             style={{ marginTop: -30, width: 64, height: 64, borderRadius: radius.full, backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
               borderWidth: 5, borderColor: c.surface, shadowColor: '#5b3fd9', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 8 }}>
-            <Fuel size={28} color={c.onBrand} />
+            <ScanBarcode size={28} color={c.onBrand} />
           </PressableScale>
-          <Text style={[type.caption, { color: c.brandText, fontFamily: 'Inter_700Bold', marginTop: 2, marginBottom: 6 }]}>Fuel</Text>
+          <Text style={[type.caption, { color: c.brandText, fontFamily: 'Inter_700Bold', marginTop: 2, marginBottom: 6 }]}>Scan</Text>
         </View>
         {right.map(tab)}
       </View>
@@ -68,7 +66,6 @@ export default function TabLayout() {
     <Tabs tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, animation: 'fade' }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="categories" />
-      <Tabs.Screen name="fuel" />
       <Tabs.Screen name="favourites" />
       <Tabs.Screen name="profile" />
     </Tabs>

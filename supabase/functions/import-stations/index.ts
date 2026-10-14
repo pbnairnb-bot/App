@@ -15,9 +15,9 @@ const tileQuery = (kind: string, [s, w, n, e]: number[]) => kind === "stations"
   ? `[out:json][timeout:90];(node[amenity=fuel](${s},${w},${n},${e});way[amenity=fuel](${s},${w},${n},${e}););out center tags;`
   : `[out:json][timeout:90];node[place~"^(city|town|suburb|village|quarter)$"][name](${s},${w},${n},${e});out tags;`;
 const SERVERS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
 ];
 const yes = (v?: string) => !!v && v !== "no";
@@ -27,7 +27,7 @@ async function overpass(q: string) {
   for (const url of SERVERS) {
     try {
       const r = await fetch(url, {
-        method: "POST", body: "data=" + encodeURIComponent(q),
+        method: "POST", body: "data=" + encodeURIComponent(q), signal: AbortSignal.timeout(45000),
         headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json", "User-Agent": "PriceMatchNZ/1.0 (+https://github.com/pbnairnb-bot/App)" },
       });
       if (!r.ok) { errors.push(`${url} ${r.status}`); continue; }
@@ -49,10 +49,18 @@ Deno.serve(async (req: Request) => {
   // One region per call (?tile=0..7) keeps each request well inside the edge runtime's time limit.
   const tileIdx = Number(params.get("tile") ?? "-1");
   if (!(tileIdx >= 0 && tileIdx < TILES.length)) return json({ error: "pass ?tile=0..7", tiles: TILES.length }, 400);
-  const source = `osm-${kind}-${tileIdx}`;
+  // Optional ?part=0..3 splits the region into quarters for busy areas (Auckland, Waikato).
+  const part = params.get("part");
+  let box = TILES[tileIdx];
+  if (part != null) {
+    const p = Number(part); const [s0, w0, n0, e0] = box; const mLat = (s0 + n0) / 2, mLng = (w0 + e0) / 2;
+    box = [[s0, w0, mLat, mLng], [s0, mLng, mLat, e0], [mLat, w0, n0, mLng], [mLat, mLng, n0, e0]][p] as [number, number, number, number];
+    if (!box) return json({ error: "part must be 0..3" }, 400);
+  }
+  const source = `osm-${kind}-${tileIdx}${part != null ? `-${part}` : ""}`;
 
   const elements: any[] = []; const errors: string[] = []; let server: string | null = null;
-  for (const t of [TILES[tileIdx]]) {
+  for (const t of [box]) {
     const res = await overpass(tileQuery(kind, t));
     errors.push(...res.errors);
     if (!res.elements) {

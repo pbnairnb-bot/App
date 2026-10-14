@@ -56,7 +56,7 @@ export default function History() {
         contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 140 }}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={scans.length ? <Text style={[type.caption, { color: c.inkSecondary, marginTop: space[2] }]}>{scans.length} product{scans.length === 1 ? '' : 's'} · {userId ? 'saved to your account' : 'saved on this phone. Sign in to keep them on all your devices'}</Text> : null}
-        ListEmptyComponent={<EmptyState icon={ScanBarcode} title="No scans yet" body="Scan a product's barcode to compare its price across NZ stores. Your scans are kept here." action="Scan a product" onAction={() => router.replace('/scan')} />}
+        ListEmptyComponent={<EmptyState icon={ScanBarcode} title="No scans yet" body="Tap Scan in the middle of the bottom bar to scan a product's barcode. Your scans are kept here." />}
         renderSectionHeader={({ section }) => <Text style={[type.bodyStrong, { color: c.inkSecondary, marginTop: space[4], marginBottom: space[2] }]}>{section.title}</Text>}
         renderItem={({ item, index, section }) => {
           const first = index === 0, last = index === section.data.length - 1;

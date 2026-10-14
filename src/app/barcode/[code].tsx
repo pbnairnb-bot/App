@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ImageIcon, ScanBarcode, SearchX } from 'lucide-react-native';
+import { ImageIcon, SearchX } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Button, FadeInView, Notice, useTheme } from '@/design/components';
@@ -8,6 +8,7 @@ import { radius, space, type } from '@/design/theme';
 import { bestOffer } from '@/data/compare';
 import { findByBarcode, findByBarcodeRemote, getOffers, lookupOpenFoodFacts } from '@/data/repo';
 import { searchRetail, type RetailProduct } from '@/data/retail';
+import { itemByGtin } from '@/data/store';
 import type { Product } from '@/data/types';
 import { useApp } from '@/state/app-state';
 import { EmptyState, Screen, TopBar } from '@/ui/kit';
@@ -38,6 +39,13 @@ export default function BarcodeResult() {
       return;
     }
     (async () => {
+      // Saved store prices for this exact barcode: open the comparison straight away.
+      const stored = await itemByGtin(code).catch(() => null);
+      if (stored && alive) {
+        addScan({ barcode: code, name: `${stored.name}${stored.size ? ` ${stored.size}` : ''}`, imageUrl: stored.imageUrl ?? undefined, bestPrice: stored.bestCents / 100, bestStore: stored.bestStore });
+        router.replace({ pathname: '/item/[id]', params: { id: stored.id } });
+        return;
+      }
       const p = (await findByBarcodeRemote(code)) ?? (await lookupOpenFoodFacts(code));
       if (!alive) return;
       setProduct(p);
@@ -100,7 +108,6 @@ export default function BarcodeResult() {
           )}
 
           <Button block variant="secondary" onPress={() => router.push({ pathname: '/report', params: { name: `${product.name}${product.size ? ` ${product.size}` : ''}`, barcode: code } })}>Share a price you've seen</Button>
-          {from === 'scan' && <Button block variant="secondary" icon={ScanBarcode} onPress={() => router.replace('/scan')}>Scan another</Button>}
           <Text style={[type.caption, { color: c.inkTertiary }]}>Product details and photo from Open Food Facts (CC BY-SA). Saved to your Scan History.</Text>
         </FadeInView>
       )}
