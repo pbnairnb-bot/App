@@ -2,13 +2,15 @@ import { router } from 'expo-router';
 import { Bell, ChevronRight, MapPinned, Mic, Search, ShieldCheck, Sparkles, Tag } from 'lucide-react-native';
 import React from 'react';
 import { FlatList, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { FadeInView, LocationPill, PressableScale, useTheme } from '@/design/components';
+import { distanceKm, FadeInView, LocationPill, PressableScale, useTheme } from '@/design/components';
 import { radius, size, space, type } from '@/design/theme';
 import { CATEGORY_LIST } from '@/data/categories';
 import { policies } from '@/data/repo';
 import { popularItems, priceDrops, recentItems, storeDeals, type StoreDeal, type StoreItem } from '@/data/store';
 import { dollars } from '@/data/retail';
 import { useApp } from '@/state/app-state';
+import { supabase } from '@/lib/supabase';
+import { formatKm } from '@/data/compare';
 import { IconButton, InfoNote, LiveDataNotice, Logo, Screen, SectionHeader, TAB_BAR_SPACE } from '@/ui/kit';
 import { CategoryTile, DealBannerCard, ItemCard } from '@/ui/store-cards';
 
@@ -105,6 +107,7 @@ export default function Home() {
           </View>
           <ChevronRight size={20} color={c.inkTertiary} />
         </PressableScale>
+        <NearestStores />
       </FadeInView>
 
       {/* D. Popular products and price comparisons */}
@@ -163,5 +166,34 @@ function ItemRow({ items, loading, notes }: { items: StoreItem[]; loading?: bool
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[2] }}>
       {items.map((it, i) => <ItemCard key={it.id} it={it} note={notes?.[i]} />)}
     </ScrollView>
+  );
+}
+
+/** The three nearest stores to the shopper's area, from saved store locations. */
+function NearestStores() {
+  const c = useTheme();
+  const { location } = useApp();
+  const [list, setList] = React.useState<{ id: string; name: string; km: number; address: string | null }[]>([]);
+  React.useEffect(() => {
+    if (!location) { setList([]); return; }
+    const d = 0.08;
+    supabase.from('store_locations').select('id,name,brand,lat,lng,address,kind')
+      .gte('lat', location.lat - d).lte('lat', location.lat + d).gte('lng', location.lng - d * 1.3).lte('lng', location.lng + d * 1.3)
+      .in('kind', ['supermarket', 'chemist', 'pet', 'department']).limit(400)
+      .then(({ data }) => setList((data ?? []).map((r: any) => ({ id: r.id, name: r.brand && !r.name.includes(r.brand) ? `${r.brand} ${r.name}` : r.name, km: distanceKm(location, r), address: r.address }))
+        .sort((a, b) => a.km - b.km).slice(0, 3)), () => {});
+  }, [location?.lat, location?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!list.length) return null;
+  return (
+    <View style={{ marginTop: space[2], gap: 2 }}>
+      {list.map((st) => (
+        <PressableScale key={st.id} accessibilityRole="button" onPress={() => router.push('/map')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: 6, paddingHorizontal: space[3] }}>
+          <MapPinned size={14} color={c.inkTertiary} />
+          <Text style={[type.body, { color: c.ink, flex: 1 }]} numberOfLines={1}>{st.name}</Text>
+          <Text style={[type.caption, { color: c.inkSecondary }]}>{formatKm(st.km)}</Text>
+        </PressableScale>
+      ))}
+    </View>
   );
 }
