@@ -50,7 +50,7 @@ export default function StoreItemScreen() {
       } />
       <FadeInView index={0} style={{ paddingHorizontal: space[4], gap: space[3] }}>
         <View style={{ alignItems: 'center', padding: space[3], borderRadius: radius.lg, backgroundColor: '#fff' }}>
-          <ProductPhoto uri={item.imageUrl} size={180} label={item.name} />
+          <ProductPhoto uri={item.imageUrl} size={180} label={item.name} category={item.category} />
         </View>
         {item.imageSource && <Text style={[type.caption, { color: c.inkTertiary }]}>Photo: {item.imageSource}</Text>}
         <Text style={[type.caption, { color: c.inkSecondary }]}>{[CATEGORY_LABELS[item.category], item.gtin].filter(Boolean).join(' · ')}</Text>

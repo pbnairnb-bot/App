@@ -1,5 +1,4 @@
-import { Image } from 'expo-image';
-import { ExternalLink, ImageIcon } from 'lucide-react-native';
+import { ExternalLink } from 'lucide-react-native';
 import React from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useTheme } from '@/design/components';
@@ -7,6 +6,7 @@ import { radius, space, type } from '@/design/theme';
 import { formatKm } from '@/data/compare';
 import { dollars, isOld, observedAgo, type RetailProduct } from '@/data/retail';
 import { Card } from './kit';
+import { ProductPhoto } from './store-cards';
 
 /** One product with its observed price at each store, lowest first. */
 export function RetailCard({ p }: { p: RetailProduct }) {
@@ -15,9 +15,7 @@ export function RetailCard({ p }: { p: RetailProduct }) {
   return (
     <Card style={{ padding: space[3], gap: space[2] }}>
       <View style={{ flexDirection: 'row', gap: space[3], alignItems: 'center' }}>
-        <View style={{ width: 56, height: 56, borderRadius: radius.md, backgroundColor: c.surfaceMuted, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          {p.image ? <Image source={{ uri: p.image }} style={{ width: '100%', height: '100%' }} contentFit="contain" accessibilityLabel={p.name} /> : <ImageIcon size={22} color={c.inkTertiary} />}
-        </View>
+        <ProductPhoto uri={p.image} size={56} label={p.name} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{p.name}</Text>
           <Text style={[type.caption, { color: c.inkSecondary }]}>{[p.size, compared ? `Same item at ${p.offers.length} stores` : 'Only seen at 1 store'].filter(Boolean).join(' · ')}</Text>

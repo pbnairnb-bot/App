@@ -68,7 +68,7 @@ function ItemRow({ it }: { it: StoreItem }) {
   return (
     <Card onPress={() => router.push({ pathname: '/item/[id]', params: { id: it.id } })} accessibilityLabel={`${it.name}, ${dollars(it.bestCents)} at ${it.bestStore}`}
       style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3] }}>
-      <ProductPhoto uri={it.imageUrl} size={60} label={it.name} />
+      <ProductPhoto uri={it.imageUrl} size={60} label={it.name} category={it.category} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[type.bodyStrong, { color: c.ink }]} numberOfLines={2}>{it.name}</Text>
         <Text style={[type.caption, { color: c.inkSecondary }]} numberOfLines={1}>{[it.size, it.storeCount > 1 ? `lowest of ${it.storeCount} stores` : it.bestStore].filter(Boolean).join(' · ')}</Text>

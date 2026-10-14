@@ -1,27 +1,41 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { ImageIcon, Tag } from 'lucide-react-native';
+import { Tag } from 'lucide-react-native';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { PressableScale, useTheme } from '@/design/components';
 import { radius, space, type } from '@/design/theme';
-import type { CATEGORY_LIST } from '@/data/categories';
+import { CATEGORY_LIST } from '@/data/categories';
 import { dollars, isOld, observedAgo } from '@/data/retail';
 import type { StoreDeal, StoreItem } from '@/data/store';
 import { shadow } from './kit';
 
 const openItem = (id: string) => router.push({ pathname: '/item/[id]', params: { id } });
 
-/** Product photo with a quiet fallback; a broken image URL never breaks the layout. */
-export function ProductPhoto({ uri, size, label }: { uri: string | null | undefined; size: number; label: string }) {
-  const c = useTheme();
+/**
+ * Product photo. Only genuine photos are shown (Open Food Facts, matched by barcode or exact product).
+ * Without one we show a clear "no photo" tile in the product's category style, never another product's
+ * picture; a broken image URL falls back to the same tile instead of a blank box.
+ */
+export function ProductPhoto({ uri, size, label, category }: { uri: string | null | undefined; size: number; label: string; category?: string }) {
   const [failed, setFailed] = React.useState(false);
+  const [loading, setLoading] = React.useState(!!uri);
+  const cat = CATEGORY_LIST.find((x) => x.id === category) ?? CATEGORY_LIST[0];
+  if (!uri || failed) {
+    return (
+      <LinearGradient colors={[`${cat.tint[0]}33`, `${cat.tint[1]}26`]} style={{ width: size, height: size, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+        accessible accessibilityLabel={`${label}, no photo available`}>
+        <cat.icon size={size * 0.34} color={cat.tint[1]} strokeWidth={1.8} />
+        {size >= 90 && <Text style={[type.caption, { color: cat.tint[1], fontSize: 11 }]}>No photo yet</Text>}
+      </LinearGradient>
+    );
+  }
   return (
     <View style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      {uri && !failed
-        ? <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="contain" transition={150} accessibilityLabel={label} onError={() => setFailed(true)} />
-        : <ImageIcon size={size * 0.35} color={c.inkTertiary} />}
+      <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="contain" transition={150} accessibilityLabel={label} cachePolicy="memory-disk"
+        onLoad={() => setLoading(false)} onError={() => setFailed(true)} />
+      {loading && <ActivityIndicator style={{ position: 'absolute' }} color={cat.tint[1]} />}
     </View>
   );
 }
@@ -52,7 +66,7 @@ export function DealBannerCard({ d, width }: { d: StoreDeal; width: number }) {
             <Text style={[type.caption, { color: '#ffffffdd' }]} numberOfLines={1}>{d.offer.store} · seen {observedAgo(d.offer.observedAt)}</Text>
           </View>
         </View>
-        <ProductPhoto uri={d.item.imageUrl} size={108} label={d.item.name} />
+        <ProductPhoto uri={d.item.imageUrl} size={108} label={d.item.name} category={d.item.category} />
       </LinearGradient>
     </PressableScale>
   );
@@ -65,7 +79,7 @@ export function ItemCard({ it, note }: { it: StoreItem; note?: string }) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={`${it.name}, ${dollars(it.bestCents)} at ${it.bestStore}`} onPress={() => openItem(it.id)}
       style={{ width: 164, padding: space[3], gap: 6, borderRadius: radius.lg, backgroundColor: c.surface, ...shadow }}>
-      <View style={{ alignItems: 'center' }}><ProductPhoto uri={it.imageUrl} size={96} label={it.name} /></View>
+      <View style={{ alignItems: 'center' }}><ProductPhoto uri={it.imageUrl} size={96} label={it.name} category={it.category} /></View>
       <Text style={[type.bodyStrong, { color: c.ink, minHeight: 40 }]} numberOfLines={2}>{it.name}</Text>
       {it.size && <Text style={[type.caption, { color: c.inkSecondary }]} numberOfLines={1}>{it.size}</Text>}
       <Text style={[type.priceMd, { color: it.storeCount > 1 ? c.dealText : c.ink }]}>{dollars(it.bestCents)}</Text>
