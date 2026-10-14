@@ -59,12 +59,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session, ready, locked, biometric,
     account: session?.user.phone ? `+${session.user.phone.replace(/^\+/, '')}` : session?.user.email ?? undefined,
     userId: session?.user.id,
-    sendCode: async (phone) => {
-      const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true, channel: 'sms' } });
+    // `target` is an NZ mobile in E.164 (+64…) for a text code, or an email address for an emailed code.
+    sendCode: async (target) => {
+      const { error } = target.includes('@')
+        ? await supabase.auth.signInWithOtp({ email: target.trim().toLowerCase(), options: { shouldCreateUser: true } })
+        : await supabase.auth.signInWithOtp({ phone: target, options: { shouldCreateUser: true, channel: 'sms' } });
       if (error) throw error;
     },
-    verifyCode: async (phone, code) => {
-      const { data, error } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+    verifyCode: async (target, code) => {
+      const { data, error } = target.includes('@')
+        ? await supabase.auth.verifyOtp({ email: target.trim().toLowerCase(), token: code, type: 'email' })
+        : await supabase.auth.verifyOtp({ phone: target, token: code, type: 'sms' });
       if (error || !data.session) throw error ?? new Error('That code didn’t work. Check it and try again.');
       return data.session;
     },

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Smartphone, X } from 'lucide-react-native';
+import { Mail, Smartphone, X } from 'lucide-react-native';
 import React from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
 import { BiometricOptIn, Button, FadeInView, Notice, OtpInput, ResendTimer, useTheme } from '@/design/components';
@@ -20,14 +20,23 @@ export default function SignIn() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>();
   const [refresh, setRefresh] = React.useState('');
-  const phone = toNzMobile(input);
+  const [mode, setMode] = React.useState<'phone' | 'email'>('phone');
+  const [smsOff, setSmsOff] = React.useState(false);
+  const email = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.trim()) ? input.trim().toLowerCase() : null;
+  // The verified target: an NZ mobile (+64…) or an email address.
+  const phone = mode === 'phone' ? toNzMobile(input) : email;
   const [sentAt, setSentAt] = React.useState(0);
+  const switchMode = (m: 'phone' | 'email') => { setMode(m); setInput(''); setError(undefined); };
 
   const send = async () => {
-    if (!phone) { setError('Enter a New Zealand mobile number, like 021 123 4567.'); return; }
+    if (!phone) { setError(mode === 'phone' ? 'Enter a New Zealand mobile number, like 021 123 4567.' : 'Enter a valid email address.'); return; }
     setBusy(true); setError(undefined);
     try { await sendCode(phone); setSentAt(Date.now()); setCode(''); setStep('code'); }
-    catch (e) { setError(friendly(e)); }
+    catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      if (mode === 'phone' && /unsupported phone provider|phone_provider_disabled/i.test(m + ((e as any)?.code ?? ''))) setSmsOff(true);
+      setError(friendly(e));
+    }
     finally { setBusy(false); }
   };
 
@@ -51,17 +60,19 @@ export default function SignIn() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ paddingHorizontal: space[6], gap: space[4] }}>
         {step === 'phone' && (
           <FadeInView index={0} style={{ gap: space[4] }}>
-            <Text accessibilityRole="header" style={[type.h1, { color: c.ink }]}>Sign in with your mobile</Text>
-            <Text style={[type.bodyLg, { color: c.inkSecondary }]}>No password needed. We'll text a 6-digit code to your New Zealand mobile. Signing in keeps your favourites and price alerts on all your devices.</Text>
+            <Text accessibilityRole="header" style={[type.h1, { color: c.ink }]}>{mode === 'phone' ? 'Sign in with your mobile' : 'Sign in with your email'}</Text>
+            <Text style={[type.bodyLg, { color: c.inkSecondary }]}>No password needed. We'll {mode === 'phone' ? 'text a 6-digit code to your New Zealand mobile' : 'email you a 6-digit code'}. Signing in keeps your favourites, scan history and price alerts on all your devices.</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: size.tapTarget, paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: error ? c.danger : c.borderStrong, backgroundColor: c.surface }}>
-              <Smartphone size={20} color={c.inkTertiary} />
-              <Text style={[type.bodyLg, { color: c.inkSecondary }]}>NZ</Text>
-              <TextInput value={input} onChangeText={(t) => { setInput(t); setError(undefined); }} placeholder="021 123 4567" placeholderTextColor={c.inkTertiary} autoFocus
-                keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" accessibilityLabel="Mobile number"
-                returnKeyType="send" onSubmitEditing={send} maxLength={16} style={[type.bodyLg, { flex: 1, color: c.ink, paddingVertical: space[3] }]} />
+              {mode === 'phone' ? <Smartphone size={20} color={c.inkTertiary} /> : <Mail size={20} color={c.inkTertiary} />}
+              {mode === 'phone' && <Text style={[type.bodyLg, { color: c.inkSecondary }]}>NZ</Text>}
+              <TextInput key={mode} value={input} onChangeText={(t) => { setInput(t); setError(undefined); }} placeholder={mode === 'phone' ? '021 123 4567' : 'you@example.co.nz'} placeholderTextColor={c.inkTertiary} autoFocus
+                keyboardType={mode === 'phone' ? 'phone-pad' : 'email-address'} autoCapitalize="none" autoComplete={mode === 'phone' ? 'tel' : 'email'}
+                textContentType={mode === 'phone' ? 'telephoneNumber' : 'emailAddress'} accessibilityLabel={mode === 'phone' ? 'Mobile number' : 'Email address'}
+                returnKeyType="send" onSubmitEditing={send} maxLength={mode === 'phone' ? 16 : 120} style={[type.bodyLg, { flex: 1, color: c.ink, paddingVertical: space[3] }]} />
             </View>
             {error && <Notice tone="error" title="Couldn't send the code.">{error}</Notice>}
-            <Button block disabled={!phone || busy} onPress={send}>{busy ? 'Sending…' : 'Text me a code'}</Button>
+            <Button block disabled={!phone || busy} onPress={send}>{busy ? 'Sending…' : mode === 'phone' ? 'Text me a code' : 'Email me a code'}</Button>
+            <Button variant="ghost" onPress={() => switchMode(mode === 'phone' ? 'email' : 'phone')}>{mode === 'phone' ? 'Use email instead' : 'Use mobile number instead'}</Button>
             <Text style={[type.caption, { color: c.inkSecondary }]}>Standard SMS rules apply; the text is free to receive in NZ. You can keep using PriceMatch NZ without an account. By signing in you agree to our Terms and Privacy Policy.</Text>
           </FadeInView>
         )}
@@ -69,11 +80,11 @@ export default function SignIn() {
         {step === 'code' && (
           <FadeInView index={0} style={{ gap: space[4] }}>
             <Text accessibilityRole="header" style={[type.h1, { color: c.ink }]}>Enter your code</Text>
-            <Text style={[type.bodyLg, { color: c.inkSecondary }]}>We texted a 6-digit code to {phone ? formatNzMobile(phone) : input}. It works for 10 minutes. It can take up to a minute to arrive.</Text>
+            <Text style={[type.bodyLg, { color: c.inkSecondary }]}>We {mode === 'phone' ? 'texted' : 'emailed'} a 6-digit code to {mode === 'phone' && phone ? formatNzMobile(phone) : input.trim()}. It works for 10 minutes.{mode === 'email' ? ' Check your spam folder if it isn’t there.' : ' It can take up to a minute to arrive.'}</Text>
             <OtpInput value={code} onChange={(v) => { setCode(v); setError(undefined); }} onComplete={(v) => verify(v)} error={error} />
             <Button block disabled={code.length < 6 || busy} onPress={() => verify()}>{busy ? 'Checking…' : 'Sign in'}</Button>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Button variant="ghost" onPress={() => { setStep('phone'); setCode(''); setError(undefined); }}>Change number</Button>
+              <Button variant="ghost" onPress={() => { setStep('phone'); setCode(''); setError(undefined); }}>{mode === 'phone' ? 'Change number' : 'Change email'}</Button>
               <ResendTimer key={sentAt} seconds={60} onResend={send} />
             </View>
           </FadeInView>
@@ -96,7 +107,8 @@ function friendly(e: unknown): string {
   const status = (e as { status?: number })?.status;
   if (status === 429 || /rate|too many|for security purposes|seconds/i.test(m)) return 'Too many tries. Please wait a minute before asking for another code.';
   if (/expired|invalid|token/i.test(m)) return 'That code didn’t work or has expired. Check it, or send a new one.';
-  if (/unsupported phone provider|phone.*(disabled|not enabled)|sms.*provider/i.test(m)) return 'Text-message sign-in isn’t switched on yet. Please try again later.';
+  if (/unsupported phone provider|phone.*(disabled|not enabled)|sms.*provider/i.test(m)) return 'Text-message sign-in isn’t switched on yet. Use your email instead for now.';
+  if (/signups not allowed|email.*(disabled|not enabled)/i.test(m)) return 'Sign-in by email isn’t switched on yet. Please try again later.';
   if (/invalid.*phone|phone.*invalid/i.test(m)) return 'That number can’t receive texts. Check it’s an NZ mobile.';
   if (/network|fetch/i.test(m)) return 'No internet connection. Check your connection and try again.';
   return 'Something went wrong sending the code. Please try again.';
